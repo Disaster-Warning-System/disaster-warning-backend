@@ -7,6 +7,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use("/api/alerts", require("./routes/alertRoutes"));
 
 app.get("/", (req, res) => {
   res.json({ message: "Disaster Warning System API is running" });
@@ -26,4 +27,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };
