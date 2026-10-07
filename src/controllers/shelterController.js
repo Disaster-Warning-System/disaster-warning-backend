@@ -18,6 +18,8 @@ const describeModelValidationError = (error) => {
       return "Capacity must be a whole number greater than 0. Enter a valid capacity.";
     if (field === "occupancy")
       return "Current occupancy must be a whole number from 0 up to capacity.";
+    if (field?.startsWith("locationPoint"))
+      return "Map location is invalid. Select a valid point on the map.";
     return `The ${field || "shelter"} value is invalid. Check it and try again.`;
   }
 
@@ -25,6 +27,8 @@ const describeModelValidationError = (error) => {
     return "Shelter name is invalid. Enter a non-empty name of 120 characters or fewer.";
   if (field === "location")
     return "Shelter location is invalid. Enter a non-empty location of 240 characters or fewer.";
+  if (field?.startsWith("locationPoint"))
+    return "Map location is invalid. Select a valid point on the map.";
   if (field === "capacity")
     return "Capacity must be a whole number greater than 0. Enter a valid capacity.";
   if (field === "occupancy")
