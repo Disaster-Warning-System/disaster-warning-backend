@@ -26,6 +26,9 @@ const shelterSchema = new mongoose.Schema(
         },
         {
           validator(value) {
+            // Query validators do not have the current document; the service checks
+            // occupancy against the loaded capacity before issuing an update.
+            if (this instanceof mongoose.Query) return true;
             return value <= this.capacity;
           },
           message: "Occupancy cannot exceed capacity",

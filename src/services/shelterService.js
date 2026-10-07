@@ -34,7 +34,7 @@ const updateShelter = async (id, input) => {
   const nextOccupancy = input.occupancy ?? current.occupancy;
   if (nextOccupancy > current.capacity) {
     throw new ShelterServiceError(
-      "Occupancy cannot exceed shelter capacity",
+      "Current occupancy cannot exceed capacity. Enter a lower occupancy.",
       400,
     );
   }
