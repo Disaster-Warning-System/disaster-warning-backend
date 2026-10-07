@@ -14,6 +14,7 @@ const app = express();
 
 app.use(cors({ origin: ["http://localhost:5173", "http://localhost:3000"] }));
 app.use(express.json());
+app.use("/api/alerts", require("./routes/alertRoutes"));
 app.use("/api/hazard-reports", hazardReportRoutes);
 app.use("/api/shelters", shelterRoutes);
 app.use("/api/uploads", uploadRoutes);
@@ -42,4 +43,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };
