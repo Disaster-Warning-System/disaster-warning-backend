@@ -1,7 +1,7 @@
 // Simulates an external SMS Gateway
-const dispatchSMS = async (alertId, recipients) => {
+const dispatchSMS = (alertId, recipientCount) => {
     return new Promise((resolve, reject) => {
-        console.log(`[SMS Adapter] Sending Alert ${alertId} to ${recipients.size} citizens...`);
+        console.log(`[SMS Adapter] Sending Alert ${alertId} to ${recipientCount} citizens...`);
         // Simulate network delay and a 95% success rate
         setTimeout(() => {
             const isSuccess = Math.random() > 0.05;
