@@ -13,8 +13,21 @@ const createHazardReport = async (req, res) => {
     });
   }
 
+  const idempotencyKey = req.get("Idempotency-Key")?.trim();
+
   try {
-    const { hazardType, description, location, photoFileId, reportedBy } = req.body;
+    const { hazardType, description, severity, location, photoFileId, evidence, reportedBy } = req.body;
+    if (idempotencyKey) {
+      const existingReport = await HazardReport.findOne({ idempotencyKey });
+      if (existingReport) {
+        return res.status(201).json({
+          success: true,
+          message: "Hazard report submitted successfully",
+          report: existingReport,
+          data: existingReport,
+        });
+      }
+    }
     let storedPhotoFileId = null;
     if (photoFileId !== undefined && photoFileId !== null) {
       if (!mongoose.isValidObjectId(photoFileId) || !(await findFile(photoFileId))) {
@@ -28,23 +41,42 @@ const createHazardReport = async (req, res) => {
     const hazardReport = await HazardReport.create({
       hazardType,
       description: description.trim(),
+      severity: severity ?? "Medium",
       location: {
         latitude: location.latitude ?? null,
         longitude: location.longitude ?? null,
         address:
           typeof location.address === "string" ? location.address.trim() : "",
+        district:
+          typeof location.district === "string" ? location.district.trim() : "",
       },
       photoFileId: storedPhotoFileId,
+      evidence: Array.isArray(evidence)
+        ? evidence.map((item) => ({ url: item.url.trim(), type: item.type || "image" }))
+        : [],
       reportedBy: reportedBy ?? null,
+      idempotencyKey: idempotencyKey || undefined,
       status: "Pending Verification",
     });
 
     return res.status(201).json({
       success: true,
       message: "Hazard report submitted successfully",
+      report: hazardReport,
       data: hazardReport,
     });
   } catch (error) {
+    if (error?.code === 11000 && idempotencyKey) {
+      const existingReport = await HazardReport.findOne({ idempotencyKey });
+      if (existingReport) {
+        return res.status(201).json({
+          success: true,
+          message: "Hazard report submitted successfully",
+          report: existingReport,
+          data: existingReport,
+        });
+      }
+    }
     if (error instanceof mongoose.Error.ValidationError) {
       return res.status(400).json({
         success: false,

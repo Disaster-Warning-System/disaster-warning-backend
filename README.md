@@ -18,7 +18,7 @@ DMC Duty Officers review pending hazard reports and mark them as Verified, Rejec
 
 ### Running
 
-1. Copy `.env.example` to `.env` and set `MONGO_URI`, `JWT_SECRET` and `PORT`.
+1. Copy `.env.example` to `.env` and set `MONGO_URI`, `JWT_SECRET`, `PORT`, and `CORS_ORIGINS` as needed. `CORS_ORIGINS` is a comma-separated list of browser origins; the defaults allow the admin app and Expo web development ports.
 2. `npm install`
 3. `npm run seed` adds 2 DMC officers, 2 citizens and 12 sample reports. It only replaces its own seed data, so other data in the database is kept.
 4. `npm run dev` (or `npm start`)
