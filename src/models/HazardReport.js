@@ -30,12 +30,35 @@ const locationSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    district: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
+const evidenceSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      required: true,
+    },
+    type: {
+      type: String,
+      default: "image",
+    },
   },
   { _id: false }
 );
 
 const hazardReportSchema = new mongoose.Schema(
   {
+    reportId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     hazardType: {
       type: String,
       required: true,
