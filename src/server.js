@@ -12,7 +12,13 @@ const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 const app = express();
 
-app.use(cors({ origin: ["http://localhost:5173", "http://localhost:3000"] }));
+const corsOrigins = (process.env.CORS_ORIGINS ||
+  "http://localhost:3000,http://localhost:5173,http://localhost:8081")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
 app.use("/api/hazard-reports", hazardReportRoutes);
 app.use("/api/shelters", shelterRoutes);
