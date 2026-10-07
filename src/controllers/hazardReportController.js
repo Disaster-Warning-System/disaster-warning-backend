@@ -14,7 +14,7 @@ const createHazardReport = async (req, res) => {
   }
 
   try {
-    const { hazardType, description, location, photoFileId, reportedBy } = req.body;
+    const { hazardType, description, severity, location, photoFileId, evidence, reportedBy } = req.body;
     let storedPhotoFileId = null;
     if (photoFileId !== undefined && photoFileId !== null) {
       if (!mongoose.isValidObjectId(photoFileId) || !(await findFile(photoFileId))) {
@@ -28,13 +28,19 @@ const createHazardReport = async (req, res) => {
     const hazardReport = await HazardReport.create({
       hazardType,
       description: description.trim(),
+      severity: severity ?? "Medium",
       location: {
         latitude: location.latitude ?? null,
         longitude: location.longitude ?? null,
         address:
           typeof location.address === "string" ? location.address.trim() : "",
+        district:
+          typeof location.district === "string" ? location.district.trim() : "",
       },
       photoFileId: storedPhotoFileId,
+      evidence: Array.isArray(evidence)
+        ? evidence.map((item) => ({ url: item.url.trim(), type: item.type || "image" }))
+        : [],
       reportedBy: reportedBy ?? null,
       status: "Pending Verification",
     });
