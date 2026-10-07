@@ -82,6 +82,10 @@ const hazardReportSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    evidence: {
+      type: [evidenceSchema],
+      default: [],
+    },
     reportedBy: {
       type: String,
       default: null,
