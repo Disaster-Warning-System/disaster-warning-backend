@@ -69,6 +69,11 @@ const hazardReportSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    severity: {
+      type: String,
+      enum: severities,
+      default: "Medium",
+    },
     location: {
       type: locationSchema,
       required: true,
