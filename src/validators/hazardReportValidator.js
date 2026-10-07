@@ -10,15 +10,6 @@ const hazardTypes = new Set([
 const isFiniteNumber = (value) =>
   typeof value === "number" && Number.isFinite(value);
 
-const isHttpUrl = (value) => {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
-
 const validateHazardReport = (body) => {
   const errors = [];
 
@@ -52,11 +43,11 @@ const validateHazardReport = (body) => {
   }
 
   if (
-    body.photoUrl !== undefined &&
-    body.photoUrl !== null &&
-    (typeof body.photoUrl !== "string" || !isHttpUrl(body.photoUrl))
+    body.photoFileId !== undefined &&
+    body.photoFileId !== null &&
+    (typeof body.photoFileId !== "string" || !/^[a-f\d]{24}$/i.test(body.photoFileId))
   ) {
-    errors.push("photoUrl must be an HTTP(S) URL or null");
+    errors.push("photoFileId must be a valid file ID or null");
   }
 
   if (
