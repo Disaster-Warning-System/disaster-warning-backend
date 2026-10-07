@@ -10,27 +10,47 @@ const shelterSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 1,
-      validate: { validator: Number.isInteger, message: "Capacity must be a whole number" },
+      validate: {
+        validator: Number.isInteger,
+        message: "Capacity must be a whole number",
+      },
     },
     occupancy: {
       type: Number,
       required: true,
       min: 0,
       validate: [
-        { validator: Number.isInteger, message: "Occupancy must be a whole number" },
-        { validator(value) { return value <= this.capacity; }, message: "Occupancy cannot exceed capacity" },
+        {
+          validator: Number.isInteger,
+          message: "Occupancy must be a whole number",
+        },
+        {
+          validator(value) {
+            return value <= this.capacity;
+          },
+          message: "Occupancy cannot exceed capacity",
+        },
       ],
     },
-    operationalStatus: { type: String, enum: operationalStatuses, default: "Open" },
+    operationalStatus: {
+      type: String,
+      enum: operationalStatuses,
+      default: "Open",
+    },
     remarks: { type: String, trim: true, default: "", maxlength: 500 },
   },
-  { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
 );
 
 shelterSchema.virtual("availableSpaces").get(function () {
   return Math.max(this.capacity - this.occupancy, 0);
 });
 
+// Derive "Full" from occupancy so stored operational status cannot go stale.
 shelterSchema.virtual("availabilityStatus").get(function () {
   return this.occupancy >= this.capacity ? "Full" : this.operationalStatus;
 });
