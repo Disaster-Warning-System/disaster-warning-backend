@@ -17,6 +17,8 @@ const reportStatuses = [
   "Needs More Information",
 ];
 
+const severities = ["Low", "Medium", "High"];
+
 const locationSchema = new mongoose.Schema(
   {
     latitude: {
@@ -121,6 +123,3 @@ hazardReportSchema.pre("validate", async function () {
 });
 
 module.exports = mongoose.model("HazardReport", hazardReportSchema);
-module.exports.hazardTypes = hazardTypes;
-module.exports.reportStatuses = reportStatuses;
-module.exports.severities = severities;
