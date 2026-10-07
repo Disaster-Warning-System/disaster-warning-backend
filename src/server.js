@@ -2,12 +2,14 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const connectDB = require("./config/database");
+const hazardReportRoutes = require("./routes/hazardReportRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use("/api/alerts", require("./routes/alertRoutes"));
+app.use("/api/hazard-reports", hazardReportRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Disaster Warning System API is running" });
