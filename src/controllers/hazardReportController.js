@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const HazardReport = require("../models/HazardReport");
 const { validateHazardReport } = require("../validators/hazardReportValidator");
+const { findFile } = require("../services/gridfsService");
 
 const createHazardReport = async (req, res) => {
   const errors = validateHazardReport(req.body);
@@ -13,7 +14,17 @@ const createHazardReport = async (req, res) => {
   }
 
   try {
-    const { hazardType, description, location, photoUrl, reportedBy } = req.body;
+    const { hazardType, description, location, photoFileId, reportedBy } = req.body;
+    let storedPhotoFileId = null;
+    if (photoFileId !== undefined && photoFileId !== null) {
+      if (!mongoose.isValidObjectId(photoFileId) || !(await findFile(photoFileId))) {
+        return res.status(400).json({
+          success: false,
+          message: "The referenced photo does not exist",
+        });
+      }
+      storedPhotoFileId = photoFileId;
+    }
     const hazardReport = await HazardReport.create({
       hazardType,
       description: description.trim(),
@@ -23,7 +34,7 @@ const createHazardReport = async (req, res) => {
         address:
           typeof location.address === "string" ? location.address.trim() : "",
       },
-      photoUrl: photoUrl ?? null,
+      photoFileId: storedPhotoFileId,
       reportedBy: reportedBy ?? null,
       status: "Pending Verification",
     });
