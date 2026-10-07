@@ -126,7 +126,7 @@ const verifyReport = async (req, res) => {
   const report = await HazardReport.findOneAndUpdate(
     { _id: req.params.id, status: PENDING },
     update,
-    { new: true }
+    { returnDocument: "after" }
   );
 
   if (!report) {
