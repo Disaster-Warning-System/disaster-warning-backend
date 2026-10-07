@@ -50,8 +50,8 @@ const hazardReportSchema = new mongoose.Schema(
       type: locationSchema,
       required: true,
     },
-    photoUrl: {
-      type: String,
+    photoFileId: {
+      type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
     reportedBy: {
