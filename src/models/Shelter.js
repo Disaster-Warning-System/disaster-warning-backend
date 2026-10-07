@@ -1,11 +1,40 @@
 const mongoose = require("mongoose");
 
 const operationalStatuses = ["Open", "Closed"];
+const locationPointSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ["Point"], required: true },
+    // GeoJSON stores coordinates as [longitude, latitude].
+    coordinates: {
+      type: [Number],
+      required: true,
+      validate: {
+        validator(coordinates) {
+          if (!Array.isArray(coordinates) || coordinates.length !== 2)
+            return false;
+          const [longitude, latitude] = coordinates;
+          return (
+            Number.isFinite(longitude) &&
+            longitude >= -180 &&
+            longitude <= 180 &&
+            Number.isFinite(latitude) &&
+            latitude >= -90 &&
+            latitude <= 90
+          );
+        },
+        message:
+          "Select a map point with longitude from -180 to 180 and latitude from -90 to 90",
+      },
+    },
+  },
+  { _id: false },
+);
 
 const shelterSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
     location: { type: String, required: true, trim: true, maxlength: 240 },
+    locationPoint: { type: locationPointSchema, default: undefined },
     capacity: {
       type: Number,
       required: true,
@@ -48,6 +77,8 @@ const shelterSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   },
 );
+
+shelterSchema.index({ locationPoint: "2dsphere" }, { sparse: true });
 
 shelterSchema.virtual("availableSpaces").get(function () {
   return Math.max(this.capacity - this.occupancy, 0);

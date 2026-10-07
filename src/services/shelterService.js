@@ -23,6 +23,7 @@ const createShelter = async (input) =>
   Shelter.create({
     name: input.name.trim(),
     location: input.location.trim(),
+    locationPoint: input.locationPoint,
     capacity: input.capacity,
     occupancy: input.occupancy ?? 0,
     operationalStatus: input.operationalStatus ?? "Open",
@@ -39,6 +40,8 @@ const updateShelter = async (id, input) => {
     );
   }
   const updates = { ...input };
+  if (typeof updates.location === "string")
+    updates.location = updates.location.trim();
   if (typeof updates.remarks === "string")
     updates.remarks = updates.remarks.trim();
   return Shelter.findByIdAndUpdate(
