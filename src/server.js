@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 const connectDB = require("./config/database");
 const hazardReportRoutes = require("./routes/hazardReportRoutes");
+const shelterRoutes = require("./routes/shelterRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 
 const app = express();
@@ -10,6 +11,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use("/api/hazard-reports", hazardReportRoutes);
+app.use("/api/shelters", shelterRoutes);
 app.use("/api/uploads", uploadRoutes);
 
 app.get("/", (req, res) => {
