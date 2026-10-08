@@ -12,6 +12,7 @@ Only JPEG, PNG, and WebP images with matching file signatures are accepted. The 
 
 Configure `MONGO_URI` and other server settings through the existing environment configuration. Do not commit credentials.
 
+If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the system DNS resolver, set `MONGO_DNS_SERVERS=1.1.1.1,1.0.0.1` in the local `.env` file. This optional setting changes DNS resolvers process-wide for this backend process; omit it when the default resolver works.
 ## Verify Hazard Report (Component 2)
 
 DMC Duty Officers review pending hazard reports and mark them as Verified, Rejected or Needs More Information. Only the officer makes this decision; the system never changes a report's status on its own.
