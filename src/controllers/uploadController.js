@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
+const HazardReport = require("../models/HazardReport");
 const {
   deleteFile,
   findFile,
@@ -74,8 +75,17 @@ async function getHazardPhoto(req, res) {
 }
 
 async function deleteHazardPhoto(req, res) {
-  if (!getObjectId(req.params.fileId)) {
+  const fileId = getObjectId(req.params.fileId);
+  if (!fileId) {
     return res.status(400).json({ success: false, message: "Invalid photo file ID" });
+  }
+  // Deleting is only for cleaning up an upload whose report was never created. Evidence that
+  // belongs to a report must stay available to the officer reviewing it.
+  const attached = await HazardReport.exists({
+    $or: [{ photoFileId: fileId }, { "additionalInfo.photoFileId": fileId }],
+  });
+  if (attached) {
+    return res.status(409).json({ success: false, message: "Photo is attached to a report" });
   }
   const deleted = await deleteFile(req.params.fileId);
   return res.status(deleted ? 204 : 404).send();

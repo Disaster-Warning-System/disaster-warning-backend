@@ -187,7 +187,7 @@ describe("POST /api/reports/:id/verification", () => {
     const response = await request(app)
       .post(`/api/reports/${report._id}/verification`)
       .set(auth(officer))
-      .send({ decision: "Verified" });
+      .send({ decision: "Verified", checklist: { locationChecked: true } });
 
     expect(response.status).toBe(200);
     expect(response.body.data.report.status).toBe("Verified");
