@@ -1,4 +1,5 @@
 const express = require("express");
+const shelterImageRoutes = require("./shelterImageRoutes");
 const {
   getShelters,
   getShelterById,
@@ -8,6 +9,8 @@ const {
 } = require("../controllers/shelterController");
 
 const router = express.Router();
+// Keep the static image path ahead of /:id so "images" is never parsed as an ID.
+router.use("/images", shelterImageRoutes);
 router.get("/", getShelters);
 router.post("/", createShelterRecord);
 router.get("/:id", getShelterById);

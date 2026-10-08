@@ -70,6 +70,8 @@ const shelterSchema = new mongoose.Schema(
       default: "Open",
     },
     remarks: { type: String, trim: true, default: "", maxlength: 500 },
+    // Store the GridFS file id; image bytes live in the shelterImages bucket.
+    imageId: { type: mongoose.Schema.Types.ObjectId, default: null },
   },
   {
     timestamps: true,
