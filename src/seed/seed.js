@@ -1,4 +1,5 @@
-// Seeds demo data for the Verify Hazard Report component.
+// Seeds demo data for the Verify Hazard Report component, including one report that
+// waits for the citizen to reply with more information.
 // Only touches its own users (by email) and the reports created by the seed citizens,
 // so other teammates' data is left alone.
 require("dotenv").config();
@@ -89,6 +90,13 @@ const seedReports = [
     description: "Ratnapura town flooding, Kalu Ganga burst its banks near the main bus stand.",
     location: { latitude: 6.6828, longitude: 80.3992, address: "Ratnapura bus stand", district: "Ratnapura" },
     evidence: [photo("Ratnapura town"), photo("Bus stand")],
+  },
+  {
+    hazardType: "Landslide", severity: "Medium", citizen: 0, decision: "Needs More Information",
+    remarks: "Please send a photo of the slope and the nearest landmark or road name.",
+    description: "Heard a loud noise from the hill behind our village in Ambagamuwa.",
+    location: { latitude: 6.9497, longitude: 80.5888, address: "", district: "Nuwara Eliya" },
+    evidence: [],
   },
   {
     hazardType: "Fire", severity: "Low", citizen: 1, decision: "Rejected",

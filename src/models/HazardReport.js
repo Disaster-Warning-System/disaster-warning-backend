@@ -55,6 +55,27 @@ const evidenceSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// A reply from the reporter after an officer asked for more information
+const additionalInfoSchema = new mongoose.Schema(
+  {
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 1000,
+    },
+    photoFileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    addedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const hazardReportSchema = new mongoose.Schema(
   {
     reportId: {
@@ -111,9 +132,17 @@ const hazardReportSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    additionalInfo: {
+      type: [additionalInfoSchema],
+      default: [],
+    },
   },
   { timestamps: true }
 );
+
+hazardReportSchema.index({ status: 1, createdAt: -1 });
+hazardReportSchema.index({ reportedBy: 1, createdAt: -1 });
+hazardReportSchema.index({ "location.district": 1 });
 
 // Gives every new report a readable id like "HR-20261008-000125". The counter is
 // incremented atomically, so two reports created at once never share an id.

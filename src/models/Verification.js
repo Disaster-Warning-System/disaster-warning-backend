@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 
-const verificationDecisions = ["Verified", "Rejected", "Needs More Information"];
+const { OFFICER_DECISIONS } = require("../utils/constants");
+
+// "Reopened" is recorded when an officer sends a rejected report back to the queue
+const verificationDecisions = [...OFFICER_DECISIONS, "Reopened"];
 
 const verificationSchema = new mongoose.Schema(
   {
@@ -27,6 +30,8 @@ const verificationSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+verificationSchema.index({ report: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Verification", verificationSchema);
 module.exports.verificationDecisions = verificationDecisions;

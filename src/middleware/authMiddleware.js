@@ -21,7 +21,13 @@ const protect = (req, res, next) => {
   }
 };
 
-const requireRole = (...roles) => (req, res, next) => {
+// Lets anonymous requests through but still identifies the user when a token is sent
+const optionalAuth = (req, res, next) => {
+  if (!req.headers.authorization) return next();
+  return protect(req, res, next);
+};
+
+const requireRole =(...roles) => (req, res, next) => {
   if (!req.user || !roles.includes(req.user.role)) {
     return res.status(403).json({
       success: false,
@@ -31,4 +37,4 @@ const requireRole = (...roles) => (req, res, next) => {
   return next();
 };
 
-module.exports = { protect, requireRole };
+module.exports = { protect, optionalAuth, requireRole };

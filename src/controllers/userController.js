@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { userRoles } = require("../models/User");
 
+const publicRoles = ["Citizen", "Volunteer"];
+
 const createToken = (user) =>
   jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: "1d",
@@ -33,6 +35,14 @@ const register = async (req, res) => {
     return res.status(400).json({
       success: false,
       message: `role must be one of: ${userRoles.join(", ")}`,
+    });
+  }
+
+  // Officer accounts carry verification and broadcast rights, so they are never self-registered
+  if (role !== undefined && !publicRoles.includes(role)) {
+    return res.status(403).json({
+      success: false,
+      message: "Officer accounts are created by an administrator",
     });
   }
 
