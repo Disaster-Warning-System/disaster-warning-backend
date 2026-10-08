@@ -23,7 +23,7 @@ const payload = {
   headline: 'Flood warning',
   instruction: 'Move to higher ground',
   severity: 'Warning',
-  districts: ['Colombo', 'Gampaha'],
+  targetAreas: ['Colombo', 'Gampaha'],
   channels: ['SMS', 'Push'],
 };
 
@@ -49,7 +49,7 @@ test('creates and dispatches an alert with delivery logs', async () => {
 
   expect(response.status).toBe(201);
   expect(response.body.alert.status).toBe('Dispatched');
-  expect(response.body.deliveryLogs).toHaveLength(2);
+  expect(response.body.alert.deliveryLogs).toHaveLength(2);
   expect(response.body.recipientsReached).toBe(4);
 });
 
@@ -63,10 +63,10 @@ test('rejects missing required fields', async () => {
 test('aborts when no registered recipients exist', async () => {
   const response = await request(app)
     .post('/api/alerts')
-    .send({ ...payload, districts: ['Unknown'] });
+    .send({ ...payload, targetAreas: ['Unknown'] });
 
   expect(response.status).toBe(400);
-  expect(response.body.message).toMatch(/No registered recipients/);
+  expect(response.body.message).toMatch(/No citizens registered/);
   expect(Alert.create).not.toHaveBeenCalled();
 });
 
@@ -77,7 +77,7 @@ test('continues after an adapter failure and marks the alert partially dispatche
 
   expect(response.status).toBe(201);
   expect(response.body.alert.status).toBe('Partially Dispatched');
-  expect(response.body.deliveryLogs).toEqual(
+  expect(response.body.alert.deliveryLogs).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ channel: 'SMS', status: 'Failed', reason: 'SMS Gateway Timeout' }),
       expect.objectContaining({ channel: 'Push', status: 'Success' }),

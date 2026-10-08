@@ -20,8 +20,11 @@ const alertSchema = new mongoose.Schema(
       enum: ['Advisory', 'Watch', 'Warning', 'Evacuation Order'],
       required: true,
     },
-    targetAreas: { type: [String], required: true },
-    channels: { type: [String], required: true },
+    targetAreas: { type: [{ type: String, trim: true }], required: true },
+    channels: {
+      type: [{ type: String, enum: ['SMS', 'Push'] }],
+      required: true,
+    },
     status: {
       type: String,
       enum: ['Draft', 'Dispatching', 'Dispatched', 'Partially Dispatched', 'Failed'],

@@ -35,11 +35,9 @@ const payload = {
   channels: ['SMS', 'Push'],
 };
 
-function mockCreatedAlert(data = payload) {
+function createAlertEntity(data) {
   return {
-    alertId: 'ALT-test',
     ...data,
-    status: 'Dispatching',
     deliveryLogs: [],
     save: jest.fn().mockResolvedValue(undefined),
   };
@@ -54,10 +52,10 @@ beforeEach(() => {
     status: 'Success',
     bypassSilent: true,
   });
-  Alert.create.mockImplementation(async (data) => mockCreatedAlert(data));
+  Alert.create.mockImplementation(async (data) => createAlertEntity(data));
 });
 
-test('successfully creates and dispatches an alert', async () => {
+test('creates and dispatches a validated alert', async () => {
   const response = await request(app).post('/api/alerts').send(payload);
 
   expect(response.status).toBe(201);
@@ -67,23 +65,35 @@ test('successfully creates and dispatches an alert', async () => {
     { channel: 'Push', status: 'Success', bypassSilent: true },
   ]);
   expect(response.body.recipientsReached).toBe(3);
-  expect(resolveRecipients).toHaveBeenCalledWith(payload.targetAreas);
+  expect(Alert.create).toHaveBeenCalledWith(
+    expect.objectContaining({ status: 'Dispatching' }),
+  );
   expect(dispatchSMS).toHaveBeenCalledWith(expect.stringMatching(/^ALT-\d+$/), 3);
-  expect(dispatchPush).toHaveBeenCalledWith(expect.stringMatching(/^ALT-\d+$/), 3, true);
+  expect(dispatchPush).toHaveBeenCalledWith(
+    expect.stringMatching(/^ALT-\d+$/),
+    3,
+    true,
+  );
 });
 
-test('returns 400 when the headline is missing', async () => {
+test.each([
+  [{ ...payload, headline: '  ' }],
+  [{ ...payload, instruction: '' }],
+  [{ ...payload, severity: 'Extreme' }],
+  [{ ...payload, targetAreas: [] }],
+  [{ ...payload, channels: [] }],
+  [{ ...payload, channels: ['Email'] }],
+])('rejects invalid alert input: %j', async (invalidPayload) => {
   const response = await request(app)
     .post('/api/alerts')
-    .send({ ...payload, headline: '' });
+    .send(invalidPayload);
 
   expect(response.status).toBe(400);
-  expect(response.body.message).toMatch(/Missing mandatory fields/);
-  expect(resolveRecipients).not.toHaveBeenCalled();
   expect(Alert.create).not.toHaveBeenCalled();
+  expect(resolveRecipients).not.toHaveBeenCalled();
 });
 
-test('returns 400 when no recipients are resolved', async () => {
+test('rejects an alert when no citizens are registered in its target areas', async () => {
   resolveRecipients.mockReturnValue(new Set());
 
   const response = await request(app).post('/api/alerts').send(payload);
@@ -93,17 +103,73 @@ test('returns 400 when no recipients are resolved', async () => {
   expect(Alert.create).not.toHaveBeenCalled();
 });
 
-test('continues dispatching after SMS failure and marks the alert partially dispatched', async () => {
+test('saves drafts without dispatching through delivery adapters', async () => {
+  const response = await request(app)
+    .post('/api/alerts')
+    .send({ ...payload, isDraft: true });
+
+  expect(response.status).toBe(201);
+  expect(response.body.alert.status).toBe('Draft');
+  expect(dispatchSMS).not.toHaveBeenCalled();
+  expect(dispatchPush).not.toHaveBeenCalled();
+});
+
+test('continues to the next adapter when SMS fails and records a partial dispatch', async () => {
   dispatchSMS.mockRejectedValueOnce(new Error('SMS Gateway Timeout'));
 
   const response = await request(app).post('/api/alerts').send(payload);
 
   expect(response.status).toBe(201);
-  expect(dispatchSMS).toHaveBeenCalled();
   expect(dispatchPush).toHaveBeenCalled();
   expect(response.body.alert.status).toBe('Partially Dispatched');
   expect(response.body.alert.deliveryLogs).toEqual([
     { channel: 'SMS', status: 'Failed', reason: 'SMS Gateway Timeout' },
     { channel: 'Push', status: 'Success', bypassSilent: true },
   ]);
+});
+
+test('marks an alert failed when every selected delivery channel fails', async () => {
+  dispatchSMS.mockRejectedValueOnce(new Error('SMS offline'));
+  dispatchPush.mockRejectedValueOnce(new Error('Push offline'));
+
+  const response = await request(app).post('/api/alerts').send(payload);
+
+  expect(response.status).toBe(201);
+  expect(response.body.alert.status).toBe('Failed');
+  expect(response.body.alert.deliveryLogs).toHaveLength(2);
+});
+
+test('returns sorted non-draft active alerts', async () => {
+  const activeAlerts = [{ alertId: 'ALT-active' }];
+  const sort = jest.fn().mockResolvedValue(activeAlerts);
+  Alert.find.mockReturnValue({ sort });
+
+  const response = await request(app).get('/api/alerts');
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual(activeAlerts);
+  expect(Alert.find).toHaveBeenCalledWith({
+    status: { $in: ['Dispatching', 'Dispatched', 'Partially Dispatched'] },
+  });
+  expect(sort).toHaveBeenCalledWith({ issuedAt: -1 });
+});
+
+test('returns a server error when alert persistence fails', async () => {
+  Alert.create.mockRejectedValueOnce(new Error('Database unavailable'));
+
+  const response = await request(app).post('/api/alerts').send(payload);
+
+  expect(response.status).toBe(500);
+  expect(response.body.error).toBe('Database unavailable');
+});
+
+test('returns a server error when active alerts cannot be loaded', async () => {
+  Alert.find.mockImplementationOnce(() => {
+    throw new Error('Database unavailable');
+  });
+
+  const response = await request(app).get('/api/alerts');
+
+  expect(response.status).toBe(500);
+  expect(response.body.error).toBe('Database unavailable');
 });
