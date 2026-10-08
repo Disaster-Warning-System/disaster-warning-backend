@@ -123,7 +123,11 @@ const getHazardReportById = async (req, res) => {
 
   try {
     const report = await HazardReport.findById(req.params.id);
-    if (!report) {
+    // Only officers and the reporter may see a report; others get 404 so they can't tell it exists
+    const canView =
+      report &&
+      (req.user.role === "DMC Officer" || report.reportedBy === req.user.id);
+    if (!canView) {
       return res.status(404).json({
         success: false,
         message: "Hazard report not found",
