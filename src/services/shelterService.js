@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Shelter = require("../models/Shelter");
+const shelterImageStorage = require("./shelterImageStorageService");
 
 class ShelterServiceError extends Error {
   constructor(message, statusCode) {
@@ -28,6 +29,7 @@ const createShelter = async (input) =>
     occupancy: input.occupancy ?? 0,
     operationalStatus: input.operationalStatus ?? "Open",
     remarks: input.remarks?.trim() ?? "",
+    imageId: input.imageId || null,
   });
 
 const updateShelter = async (id, input) => {
@@ -44,11 +46,21 @@ const updateShelter = async (id, input) => {
     updates.location = updates.location.trim();
   if (typeof updates.remarks === "string")
     updates.remarks = updates.remarks.trim();
-  return Shelter.findByIdAndUpdate(
+  const updated = await Shelter.findByIdAndUpdate(
     id,
     { $set: updates },
     { new: true, runValidators: true },
   );
+  if (
+    current.imageId &&
+    String(current.imageId) !== String(updated.imageId || "")
+  ) {
+    // Image cleanup is best effort after a successful record update.
+    await shelterImageStorage.deleteImage(current.imageId).catch((error) =>
+      console.error("Could not remove replaced shelter image:", error.message),
+    );
+  }
+  return updated;
 };
 
 const deleteShelter = async (id) => {
@@ -56,6 +68,11 @@ const deleteShelter = async (id) => {
     throw new ShelterServiceError("Shelter not found", 404);
   const shelter = await Shelter.findByIdAndDelete(id);
   if (!shelter) throw new ShelterServiceError("Shelter not found", 404);
+  if (shelter.imageId) {
+    await shelterImageStorage.deleteImage(shelter.imageId).catch((error) =>
+      console.error("Could not remove deleted shelter image:", error.message),
+    );
+  }
   return shelter;
 };
 
