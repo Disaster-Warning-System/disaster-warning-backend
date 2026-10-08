@@ -1,19 +1,17 @@
-// Simulates resolving overlapping districts using a Set to prevent duplicates
-const resolveRecipients = (districts) => {
-    const mockDatabase = {
-        'Colombo': ['user1', 'user2', 'user3'],
-        'Gampaha': ['user3', 'user4'], // user3 overlaps
-        'Kalutara': ['user5']
+const resolveRecipients = (areas) => {
+    // Mock database of citizens by area
+    const database = {
+        'Colombo': ['C001', 'C002', 'C003'],
+        'Gampaha': ['C003', 'C004'], // C003 overlaps both districts
+        'Kelani River Basin': ['C002', 'C005']
     };
 
-    let recipientSet = new Set();
-    districts.forEach(district => {
-        if (mockDatabase[district]) {
-            mockDatabase[district].forEach(user => recipientSet.add(user));
+    const uniqueRecipients = new Set();
+    new Set(areas).forEach(area => {
+        if (database[area]) {
+            database[area].forEach(citizen => uniqueRecipients.add(citizen));
         }
     });
-
-    return recipientSet;
+    return uniqueRecipients;
 };
-
 module.exports = { resolveRecipients };

@@ -3,10 +3,9 @@ const mongoose = require('mongoose');
 const deliveryLogSchema = new mongoose.Schema(
   {
     channel: { type: String, required: true },
-    status: { type: String, enum: ['Success', 'Failed'], required: true },
-    recipients: { type: Number, default: 0 },
-    reason: String,
-    deliveredAt: { type: Date, default: Date.now },
+    status: { type: String, required: true },
+    reason: { type: String, default: '' },
+    timestamp: { type: Date, default: Date.now },
   },
   { _id: false }
 );
@@ -21,15 +20,16 @@ const alertSchema = new mongoose.Schema(
       enum: ['Advisory', 'Watch', 'Warning', 'Evacuation Order'],
       required: true,
     },
-    districts: { type: [String], required: true },
-    channels: { type: [String], enum: ['SMS', 'Push'], required: true },
+    targetAreas: { type: [String], required: true },
+    channels: { type: [String], required: true },
     status: {
       type: String,
       enum: ['Draft', 'Dispatching', 'Dispatched', 'Partially Dispatched', 'Failed'],
-      required: true,
+      default: 'Draft',
       index: true,
     },
     deliveryLogs: { type: [deliveryLogSchema], default: [] },
+    issuedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
