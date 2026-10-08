@@ -5,23 +5,43 @@ const connectDB = require("./config/database");
 const hazardReportRoutes = require("./routes/hazardReportRoutes");
 const shelterRoutes = require("./routes/shelterRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const userRoutes = require("./routes/userRoutes");
+const officerRoutes = require("./routes/officerRoutes");
+const verificationRoutes = require("./routes/verificationRoutes");
+const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 const app = express();
 
-app.use(cors());
+const corsOrigins = (process.env.CORS_ORIGINS ||
+  "http://localhost:3000,http://localhost:5173,http://localhost:8081")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
+app.use("/api/alerts", require("./routes/alertRoutes"));
 app.use("/api/hazard-reports", hazardReportRoutes);
 app.use("/api/shelters", shelterRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/auth", userRoutes);
+app.use("/api/officer", officerRoutes);
+app.use("/api/reports", verificationRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Disaster Warning System API is running" });
 });
 
+app.use(notFound);
+app.use(errorHandler);
+
 const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is required to start the server");
+    }
     await connectDB();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
@@ -32,4 +52,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };
