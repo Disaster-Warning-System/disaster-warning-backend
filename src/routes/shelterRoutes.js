@@ -3,6 +3,7 @@ const shelterImageRoutes = require("./shelterImageRoutes");
 const {
   getShelters,
   getShelterById,
+  getShelterOccupancyHistoryById,
   createShelterRecord,
   updateShelterRecord,
   deleteShelterRecord,
@@ -13,6 +14,7 @@ const router = express.Router();
 router.use("/images", shelterImageRoutes);
 router.get("/", getShelters);
 router.post("/", createShelterRecord);
+router.get("/:id/history", getShelterOccupancyHistoryById);
 router.get("/:id", getShelterById);
 router.patch("/:id", updateShelterRecord);
 router.delete("/:id", deleteShelterRecord);
