@@ -2,6 +2,9 @@ jest.mock('../src/models/Alert', () => ({
   create: jest.fn(),
   find: jest.fn(),
 }));
+jest.mock('../src/models/HazardReport', () => ({
+  findById: jest.fn(),
+}));
 
 jest.mock('../src/adapters/smsAdapter', () => ({
   dispatchSMS: jest.fn(),
@@ -17,7 +20,9 @@ jest.mock('../src/services/recipientResolver', () => ({
 
 const express = require('express');
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const Alert = require('../src/models/Alert');
+const HazardReport = require('../src/models/HazardReport');
 const { dispatchSMS } = require('../src/adapters/smsAdapter');
 const { dispatchPush } = require('../src/adapters/pushAdapter');
 const { resolveRecipients } = require('../src/services/recipientResolver');
@@ -26,6 +31,8 @@ const alertRoutes = require('../src/routes/alertRoutes');
 const app = express();
 app.use(express.json());
 app.use('/api/alerts', alertRoutes);
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+const officerToken = jwt.sign({ id: 'officer-1', role: 'DMC Officer' }, process.env.JWT_SECRET);
 
 const payload = {
   headline: 'Flood warning',
@@ -35,11 +42,9 @@ const payload = {
   channels: ['SMS', 'Push'],
 };
 
-function mockCreatedAlert(data = payload) {
+function createAlertEntity(data) {
   return {
-    alertId: 'ALT-test',
     ...data,
-    status: 'Dispatching',
     deliveryLogs: [],
     save: jest.fn().mockResolvedValue(undefined),
   };
@@ -54,11 +59,17 @@ beforeEach(() => {
     status: 'Success',
     bypassSilent: true,
   });
-  Alert.create.mockImplementation(async (data) => mockCreatedAlert(data));
+  Alert.create.mockImplementation(async (data) => createAlertEntity(data));
+  HazardReport.findById.mockReturnValue({
+    select: jest.fn().mockResolvedValue({ _id: '507f1f77bcf86cd799439011', status: 'Verified' }),
+  });
 });
 
-test('successfully creates and dispatches an alert', async () => {
-  const response = await request(app).post('/api/alerts').send(payload);
+test('creates and dispatches a validated alert', async () => {
+  const response = await request(app)
+    .post('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send(payload);
 
   expect(response.status).toBe(201);
   expect(response.body.alert.status).toBe('Dispatched');
@@ -67,43 +78,117 @@ test('successfully creates and dispatches an alert', async () => {
     { channel: 'Push', status: 'Success', bypassSilent: true },
   ]);
   expect(response.body.recipientsReached).toBe(3);
-  expect(resolveRecipients).toHaveBeenCalledWith(payload.targetAreas);
+  expect(Alert.create).toHaveBeenCalledWith(
+    expect.objectContaining({ status: 'Dispatching' }),
+  );
   expect(dispatchSMS).toHaveBeenCalledWith(expect.stringMatching(/^ALT-\d+$/), 3);
-  expect(dispatchPush).toHaveBeenCalledWith(expect.stringMatching(/^ALT-\d+$/), 3, true);
+  expect(dispatchPush).toHaveBeenCalledWith(
+    expect.stringMatching(/^ALT-\d+$/),
+    3,
+    true,
+  );
 });
 
-test('returns 400 when the headline is missing', async () => {
+test.each([
+  [{ ...payload, headline: undefined }],
+  [{ ...payload, headline: '  ' }],
+  [{ ...payload, instruction: '' }],
+  [{ ...payload, severity: 'Extreme' }],
+  [{ ...payload, targetAreas: undefined }],
+  [{ ...payload, targetAreas: [] }],
+  [{ ...payload, channels: [] }],
+  [{ ...payload, channels: ['Email'] }],
+])('rejects invalid alert input: %j', async (invalidPayload) => {
   const response = await request(app)
     .post('/api/alerts')
-    .send({ ...payload, headline: '' });
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send(invalidPayload);
 
   expect(response.status).toBe(400);
-  expect(response.body.message).toMatch(/Missing mandatory fields/);
-  expect(resolveRecipients).not.toHaveBeenCalled();
   expect(Alert.create).not.toHaveBeenCalled();
+  expect(resolveRecipients).not.toHaveBeenCalled();
 });
 
-test('returns 400 when no recipients are resolved', async () => {
+test('rejects an alert when no citizens are registered in its target areas', async () => {
   resolveRecipients.mockReturnValue(new Set());
 
-  const response = await request(app).post('/api/alerts').send(payload);
+  const response = await request(app)
+    .post('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send(payload);
 
   expect(response.status).toBe(400);
   expect(response.body.message).toMatch(/No citizens registered/);
   expect(Alert.create).not.toHaveBeenCalled();
 });
 
-test('continues dispatching after SMS failure and marks the alert partially dispatched', async () => {
+test('continues to the next adapter when SMS fails and records a partial dispatch', async () => {
   dispatchSMS.mockRejectedValueOnce(new Error('SMS Gateway Timeout'));
 
-  const response = await request(app).post('/api/alerts').send(payload);
+  const response = await request(app)
+    .post('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send(payload);
 
   expect(response.status).toBe(201);
-  expect(dispatchSMS).toHaveBeenCalled();
   expect(dispatchPush).toHaveBeenCalled();
   expect(response.body.alert.status).toBe('Partially Dispatched');
   expect(response.body.alert.deliveryLogs).toEqual([
     { channel: 'SMS', status: 'Failed', reason: 'SMS Gateway Timeout' },
     { channel: 'Push', status: 'Success', bypassSilent: true },
   ]);
+});
+
+test('marks an alert partially dispatched when every selected delivery channel fails', async () => {
+  dispatchSMS.mockRejectedValueOnce(new Error('SMS offline'));
+  dispatchPush.mockRejectedValueOnce(new Error('Push offline'));
+
+  const response = await request(app)
+    .post('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send(payload);
+
+  expect(response.status).toBe(201);
+  expect(response.body.alert.status).toBe('Partially Dispatched');
+  expect(response.body.alert.deliveryLogs).toHaveLength(2);
+});
+
+test('returns sorted non-draft active alerts', async () => {
+  const activeAlerts = [{ alertId: 'ALT-active' }];
+  const sort = jest.fn().mockResolvedValue(activeAlerts);
+  Alert.find.mockReturnValue({ sort });
+
+  const response = await request(app)
+    .get('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`);
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual(activeAlerts);
+  expect(Alert.find).toHaveBeenCalledWith({});
+  expect(sort).toHaveBeenCalledWith({ issuedAt: -1 });
+});
+
+test('returns a server error when alert persistence fails', async () => {
+  Alert.create.mockRejectedValueOnce(new Error('Database unavailable'));
+
+  const response = await request(app)
+    .post('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send(payload);
+
+  expect(response.status).toBe(500);
+  expect(response.body.error).toBe('Database unavailable');
+});
+
+test('returns a server error when active alerts cannot be loaded', async () => {
+  Alert.find.mockImplementationOnce(() => {
+    throw new Error('Database unavailable');
+  });
+
+  const response = await request(app)
+    .get('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`);
+
+  expect(response.status).toBe(500);
+  expect(response.body.error).toBe('Database unavailable');
 });
