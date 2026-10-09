@@ -6,6 +6,7 @@ const hazardTypes = new Set([
   "Earthquake",
   "Other",
 ]);
+const severities = new Set(["Low", "Medium", "High"]);
 
 const isFiniteNumber = (value) =>
   typeof value === "number" && Number.isFinite(value);
@@ -25,6 +26,10 @@ const validateHazardReport = (body) => {
     errors.push("description must not be empty");
   }
 
+  if (body.severity !== undefined && !severities.has(body.severity)) {
+    errors.push("severity must be Low, Medium, or High");
+  }
+
   const location = body.location;
   if (!location || typeof location !== "object" || Array.isArray(location)) {
     errors.push("location must be an object");
@@ -40,6 +45,16 @@ const validateHazardReport = (body) => {
         "location must contain GPS latitude and longitude or a non-empty address"
       );
     }
+    if (location.district !== undefined && typeof location.district !== "string") {
+      errors.push("location.district must be a string");
+    }
+  }
+
+  if (body.evidence !== undefined && (!Array.isArray(body.evidence) || body.evidence.some((item) =>
+    !item || typeof item !== "object" || typeof item.url !== "string" || !item.url.trim() ||
+    (item.type !== undefined && typeof item.type !== "string")
+  ))) {
+    errors.push("evidence must contain items with url and type strings");
   }
 
   if (
