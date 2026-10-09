@@ -36,7 +36,7 @@ foreach ($repository in $repositories) {
   try {
     if ($repository.IsBackend) {
       # Restrict backend Jest to this feature's API and validator suites.
-      & npm.cmd test -- --runTestsByPath tests/shelterApi.test.js tests/shelterValidator.test.js
+      & npm.cmd test -- --runTestsByPath tests/shelterApi.test.js tests/shelterValidator.test.js tests/shelterModel.test.js
     } else {
       # Admin and mobile npm test scripts currently contain only shelter feature tests.
       & npm.cmd test
