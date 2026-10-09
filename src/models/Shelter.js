@@ -30,6 +30,15 @@ const locationPointSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const occupancyHistoryEntrySchema = new mongoose.Schema(
+  {
+    occupancy: { type: Number, required: true, min: 0 },
+    operationalStatus: { type: String, enum: operationalStatuses, required: true },
+    changedAt: { type: Date, required: true, default: Date.now },
+  },
+  { _id: true },
+);
+
 const shelterSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 120 },
@@ -72,6 +81,12 @@ const shelterSchema = new mongoose.Schema(
     remarks: { type: String, trim: true, default: "", maxlength: 500 },
     // Store the GridFS file id; image bytes live in the shelterImages bucket.
     imageId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // Keep the most recent occupancy/status snapshots on the shelter document for atomic updates.
+    occupancyHistory: {
+      type: [occupancyHistoryEntrySchema],
+      default: [],
+      select: false,
+    },
   },
   {
     timestamps: true,

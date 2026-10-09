@@ -14,6 +14,10 @@ Configure `MONGO_URI` and other server settings through the existing environment
 
 If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the system DNS resolver, set `MONGO_DNS_SERVERS=1.1.1.1,1.0.0.1` in the local `.env` file. This optional setting changes DNS resolvers process-wide for this backend process; omit it when the default resolver works.
 
+## Shelter Occupancy History
+
+`GET /api/shelters/:id/history` returns the shelter name and capacity with its recorded occupancy and operational-status snapshots. New shelters get an initial snapshot; later occupancy or status changes are recorded atomically with the shelter update. The system retains the most recent 100 snapshots per shelter. Records created before history tracking was added do not have reconstructable historical entries.
+
 ## Run Shelter Feature Tests Across All Repositories
 
 From the backend repository, run:

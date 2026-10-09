@@ -51,7 +51,17 @@ test("creates a shelter after validating required details", async () => {
   expect(response.body.success).toBe(true);
   expect(response.body.data.name).toBe(payload.name);
   expect(Shelter.create).toHaveBeenCalledWith(
-    expect.objectContaining({ occupancy: 35, capacity: 120 }),
+    expect.objectContaining({
+      occupancy: 35,
+      capacity: 120,
+      occupancyHistory: [
+        expect.objectContaining({
+          occupancy: 35,
+          operationalStatus: "Open",
+          changedAt: expect.any(Date),
+        }),
+      ],
+    }),
   );
 });
 
@@ -120,9 +130,74 @@ test("updates occupancy and operational status for a district update", async () 
   expect(response.body.data.occupancy).toBe(80);
   expect(Shelter.findByIdAndUpdate).toHaveBeenCalledWith(
     "66b2a945df0fc2e72ea73123",
-    { $set: { occupancy: 80, operationalStatus: "Closed" } },
+    expect.objectContaining({
+      $set: { occupancy: 80, operationalStatus: "Closed" },
+      $push: {
+        occupancyHistory: {
+          $each: [
+            expect.objectContaining({
+              occupancy: 80,
+              operationalStatus: "Closed",
+              changedAt: expect.any(Date),
+            }),
+          ],
+          $slice: -100,
+        },
+      },
+    }),
     { new: true, runValidators: true },
   );
+});
+
+test("does not add occupancy history for an unrelated shelter edit", async () => {
+  Shelter.findById.mockResolvedValue(mockShelter());
+  Shelter.findByIdAndUpdate.mockResolvedValue(mockShelter({ remarks: "Checked" }));
+
+  const response = await request(app)
+    .patch("/api/shelters/66b2a945df0fc2e72ea73123")
+    .send({ remarks: "Checked" });
+
+  expect(response.status).toBe(200);
+  expect(Shelter.findByIdAndUpdate.mock.calls[0][1]).toEqual({
+    $set: { remarks: "Checked" },
+  });
+});
+
+test("returns occupancy and status history for a shelter", async () => {
+  const history = [
+    { occupancy: 35, operationalStatus: "Open", changedAt: new Date("2026-10-01T00:00:00Z") },
+    { occupancy: 80, operationalStatus: "Closed", changedAt: new Date("2026-10-02T00:00:00Z") },
+  ];
+  Shelter.findById.mockReturnValue({
+    select: jest.fn().mockResolvedValue(mockShelter({ occupancyHistory: history })),
+  });
+
+  const response = await request(app).get(
+    "/api/shelters/66b2a945df0fc2e72ea73123/history",
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.body.data.entries).toHaveLength(2);
+  expect(response.body.data.entries[1].occupancy).toBe(80);
+  expect(response.body.data.shelter).toEqual({
+    id: "66b2a945df0fc2e72ea73123",
+    name: payload.name,
+    capacity: payload.capacity,
+  });
+  expect(Shelter.findById.mock.results[0].value.select).toHaveBeenCalledWith(
+    "+occupancyHistory",
+  );
+});
+
+test("returns not found when requesting history for an unknown shelter", async () => {
+  Shelter.findById.mockReturnValue({ select: jest.fn().mockResolvedValue(null) });
+
+  const response = await request(app).get(
+    "/api/shelters/66b2a945df0fc2e72ea73123/history",
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.body.message).toBe("Shelter not found");
 });
 
 test("prevents updates that would exceed the current shelter capacity", async () => {

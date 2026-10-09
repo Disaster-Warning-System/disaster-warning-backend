@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Shelter = require("../models/Shelter");
 const shelterImageStorage = require("./shelterImageStorageService");
+const MAX_OCCUPANCY_HISTORY_ENTRIES = 100;
 
 class ShelterServiceError extends Error {
   constructor(message, statusCode) {
@@ -28,6 +29,11 @@ const createShelter = async (input) =>
     capacity: input.capacity,
     occupancy: input.occupancy ?? 0,
     operationalStatus: input.operationalStatus ?? "Open",
+    occupancyHistory: [{
+      occupancy: input.occupancy ?? 0,
+      operationalStatus: input.operationalStatus ?? "Open",
+      changedAt: new Date(),
+    }],
     remarks: input.remarks?.trim() ?? "",
     imageId: input.imageId || null,
   });
@@ -35,6 +41,7 @@ const createShelter = async (input) =>
 const updateShelter = async (id, input) => {
   const current = await getShelter(id);
   const nextOccupancy = input.occupancy ?? current.occupancy;
+  const nextOperationalStatus = input.operationalStatus ?? current.operationalStatus;
   if (nextOccupancy > current.capacity) {
     throw new ShelterServiceError(
       "Current occupancy cannot exceed capacity. Enter a lower occupancy.",
@@ -46,9 +53,25 @@ const updateShelter = async (id, input) => {
     updates.location = updates.location.trim();
   if (typeof updates.remarks === "string")
     updates.remarks = updates.remarks.trim();
+  const updateOperation = { $set: updates };
+  if (
+    nextOccupancy !== current.occupancy ||
+    nextOperationalStatus !== current.operationalStatus
+  ) {
+    updateOperation.$push = {
+      occupancyHistory: {
+        $each: [{
+          occupancy: nextOccupancy,
+          operationalStatus: nextOperationalStatus,
+          changedAt: new Date(),
+        }],
+        $slice: -MAX_OCCUPANCY_HISTORY_ENTRIES,
+      },
+    };
+  }
   const updated = await Shelter.findByIdAndUpdate(
     id,
-    { $set: updates },
+    updateOperation,
     { new: true, runValidators: true },
   );
   if (
@@ -61,6 +84,21 @@ const updateShelter = async (id, input) => {
     );
   }
   return updated;
+};
+
+const getShelterOccupancyHistory = async (id) => {
+  if (!mongoose.isValidObjectId(id))
+    throw new ShelterServiceError("Shelter not found", 404);
+  const shelter = await Shelter.findById(id).select("+occupancyHistory");
+  if (!shelter) throw new ShelterServiceError("Shelter not found", 404);
+  return {
+    shelter: {
+      id: String(shelter.id || shelter._id),
+      name: shelter.name,
+      capacity: shelter.capacity,
+    },
+    entries: shelter.occupancyHistory || [],
+  };
 };
 
 const deleteShelter = async (id) => {
@@ -80,6 +118,7 @@ module.exports = {
   ShelterServiceError,
   listShelters,
   getShelter,
+  getShelterOccupancyHistory,
   createShelter,
   updateShelter,
   deleteShelter,
