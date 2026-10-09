@@ -227,6 +227,59 @@ test("returns a server error when report persistence fails", async () => {
   expect(response.body.message).toBe("An unexpected error occurred");
 });
 
+test("returns the logged-in citizen's reports sorted by newest first", async () => {
+  const reports = [createdReport()];
+  const sort = jest.fn().mockResolvedValue(reports);
+  HazardReport.find.mockReturnValue({ sort });
+
+  const response = await authenticatedRequest("get", "/api/hazard-reports");
+
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual(reports);
+  expect(HazardReport.find).toHaveBeenCalledWith({ reportedBy: "citizen-1" });
+  expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+});
+
+test("returns one of the logged-in citizen's reports by ID", async () => {
+  const report = createdReport();
+  HazardReport.findOne.mockResolvedValue(report);
+
+  const response = await authenticatedRequest(
+    "get",
+    `/api/hazard-reports/${report._id}`,
+  );
+
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual(report);
+  expect(HazardReport.findOne).toHaveBeenCalledWith({
+    _id: report._id,
+    reportedBy: "citizen-1",
+  });
+});
+
+test("does not expose a report belonging to another citizen", async () => {
+  HazardReport.findOne.mockResolvedValue(null);
+
+  const response = await authenticatedRequest(
+    "get",
+    "/api/hazard-reports/66b2a945df0fc2e72ea73123",
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.body.message).toBe("Hazard report not found");
+});
+
+test("rejects an invalid report ID without querying the database", async () => {
+  const response = await authenticatedRequest(
+    "get",
+    "/api/hazard-reports/not-an-object-id",
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.body.message).toBe("Hazard report not found");
+  expect(HazardReport.findOne).not.toHaveBeenCalled();
+});
+
 test("returns the stored report when a duplicate idempotency key races the first request", async () => {
   const existingReport = createdReport({ reportId: "HR-race-winner" });
   const duplicateError = new Error("Duplicate idempotency key");
