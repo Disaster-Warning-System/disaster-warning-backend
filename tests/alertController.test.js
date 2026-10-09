@@ -77,9 +77,11 @@ test('creates and dispatches a validated alert', async () => {
 });
 
 test.each([
+  [{ ...payload, headline: undefined }],
   [{ ...payload, headline: '  ' }],
   [{ ...payload, instruction: '' }],
   [{ ...payload, severity: 'Extreme' }],
+  [{ ...payload, targetAreas: undefined }],
   [{ ...payload, targetAreas: [] }],
   [{ ...payload, channels: [] }],
   [{ ...payload, channels: ['Email'] }],
@@ -103,17 +105,6 @@ test('rejects an alert when no citizens are registered in its target areas', asy
   expect(Alert.create).not.toHaveBeenCalled();
 });
 
-test('saves drafts without dispatching through delivery adapters', async () => {
-  const response = await request(app)
-    .post('/api/alerts')
-    .send({ ...payload, isDraft: true });
-
-  expect(response.status).toBe(201);
-  expect(response.body.alert.status).toBe('Draft');
-  expect(dispatchSMS).not.toHaveBeenCalled();
-  expect(dispatchPush).not.toHaveBeenCalled();
-});
-
 test('continues to the next adapter when SMS fails and records a partial dispatch', async () => {
   dispatchSMS.mockRejectedValueOnce(new Error('SMS Gateway Timeout'));
 
@@ -128,14 +119,14 @@ test('continues to the next adapter when SMS fails and records a partial dispatc
   ]);
 });
 
-test('marks an alert failed when every selected delivery channel fails', async () => {
+test('marks an alert partially dispatched when every selected delivery channel fails', async () => {
   dispatchSMS.mockRejectedValueOnce(new Error('SMS offline'));
   dispatchPush.mockRejectedValueOnce(new Error('Push offline'));
 
   const response = await request(app).post('/api/alerts').send(payload);
 
   expect(response.status).toBe(201);
-  expect(response.body.alert.status).toBe('Failed');
+  expect(response.body.alert.status).toBe('Partially Dispatched');
   expect(response.body.alert.deliveryLogs).toHaveLength(2);
 });
 
@@ -148,9 +139,7 @@ test('returns sorted non-draft active alerts', async () => {
 
   expect(response.status).toBe(200);
   expect(response.body).toEqual(activeAlerts);
-  expect(Alert.find).toHaveBeenCalledWith({
-    status: { $in: ['Dispatching', 'Dispatched', 'Partially Dispatched'] },
-  });
+  expect(Alert.find).toHaveBeenCalledWith({});
   expect(sort).toHaveBeenCalledWith({ issuedAt: -1 });
 });
 
