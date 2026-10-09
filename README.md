@@ -22,7 +22,7 @@ From the backend repository, run:
 npm run test:shelter:all
 ```
 
-This runs the shelter API and validator tests in the backend, plus the test suites in the admin and mobile repositories. The admin suite includes unit tests for shelter API client create, read, update, and delete requests, as well as form validation and save workflow rules. The three repositories must be present as sibling folders in the same `GitHub` directory, and each repository's dependencies must be installed. The command returns a failure status if any repository's tests fail.
+This runs the shelter API, validator, and capacity-model tests in the backend, plus the test suites in the admin and mobile repositories. The admin suite includes unit tests for shelter API client create, read, update, and delete requests, the full-capacity status label, form validation, and save workflow rules. The three repositories must be present as sibling folders in the same `GitHub` directory, and each repository's dependencies must be installed. The command returns a failure status if any repository's tests fail.
 
 ## Verify Hazard Report (Component 2)
 
