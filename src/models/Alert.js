@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+const severityValues = ['Advisory', 'Watch', 'Warning', 'Evacuation Order'];
+const statusValues = [
+  'Draft',
+  'Dispatching',
+  'Dispatched',
+  'Partially Dispatched',
+  'Failed',
+];
+
 const deliveryLogSchema = new mongoose.Schema(
   {
     channel: { type: String, required: true },
@@ -13,18 +22,24 @@ const deliveryLogSchema = new mongoose.Schema(
 const alertSchema = new mongoose.Schema(
   {
     alertId: { type: String, required: true, unique: true, index: true },
+    sourceReportId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HazardReport',
+      default: null,
+      index: true,
+    },
     headline: { type: String, required: true, trim: true },
     instruction: { type: String, required: true, trim: true },
     severity: {
       type: String,
-      enum: ['Advisory', 'Watch', 'Warning', 'Evacuation Order'],
+      enum: severityValues,
       required: true,
     },
-    targetAreas: { type: [String], required: true },
+    targetAreas: { type: [{ type: String, trim: true }], required: true },
     channels: { type: [String], required: true },
     status: {
       type: String,
-      enum: ['Draft', 'Dispatching', 'Dispatched', 'Partially Dispatched', 'Failed'],
+      enum: statusValues,
       default: 'Draft',
       index: true,
     },
@@ -34,4 +49,4 @@ const alertSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Alert', alertSchema);
+module.exports = mongoose.models.Alert || mongoose.model('Alert', alertSchema);

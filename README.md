@@ -14,6 +14,24 @@ Only JPEG, PNG, and WebP images with matching file signatures are accepted. The 
 
 Configure `MONGO_URI` and other server settings through the existing environment configuration. Do not commit credentials.
 
+If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the system DNS resolver, set `MONGO_DNS_SERVERS=1.1.1.1,1.0.0.1` in the local `.env` file. This optional setting changes DNS resolvers process-wide for this backend process; omit it when the default resolver works.
+
+## Shelter Occupancy History
+
+`GET /api/shelters/:id/history` returns the shelter name and capacity with its recorded occupancy and operational-status snapshots. New shelters get an initial snapshot; later occupancy or status changes are recorded atomically with the shelter update. The system retains the most recent 100 snapshots per shelter. Records created before history tracking was added do not have reconstructable historical entries.
+
+Shelter lists, details, and image reads remain available to citizens. Shelter registration, updates, deletion, image uploads/deletion, and occupancy-history reads require a valid JWT for a `District Officer`. Public registration can create Citizen or Volunteer accounts; staff accounts must be provisioned through an authorized process.
+
+## Run Shelter Feature Tests Across All Repositories
+
+From the backend repository, run:
+
+```powershell
+npm run test:shelter:all
+```
+
+This runs the shelter API, validator, and capacity-model tests in the backend, plus the test suites in the admin and mobile repositories. The admin suite includes unit tests for shelter API client create, read, update, and delete requests, the full-capacity status label, form validation, and save workflow rules. The three repositories must be present as sibling folders in the same `GitHub` directory, and each repository's dependencies must be installed. The command returns a failure status if any repository's tests fail.
+
 ## Verify Hazard Report (Component 2)
 
 DMC Duty Officers review pending hazard reports and mark them as Verified, Rejected or Needs More Information. Only the officer makes this decision; the system never changes a report's status on its own.

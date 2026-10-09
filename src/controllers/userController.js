@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { userRoles } = require("../models/User");
+const selfServiceRoles = ["Citizen", "Volunteer"];
 
 const publicRoles = ["Citizen", "Volunteer"];
 
@@ -38,11 +39,10 @@ const register = async (req, res) => {
     });
   }
 
-  // Officer accounts carry verification and broadcast rights, so they are never self-registered
-  if (role !== undefined && !publicRoles.includes(role)) {
+  if (role !== undefined && !selfServiceRoles.includes(role)) {
     return res.status(403).json({
       success: false,
-      message: "Officer accounts are created by an administrator",
+      message: "Staff accounts must be provisioned by an authorized administrator.",
     });
   }
 
