@@ -18,6 +18,8 @@ If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the sys
 
 `GET /api/shelters/:id/history` returns the shelter name and capacity with its recorded occupancy and operational-status snapshots. New shelters get an initial snapshot; later occupancy or status changes are recorded atomically with the shelter update. The system retains the most recent 100 snapshots per shelter. Records created before history tracking was added do not have reconstructable historical entries.
 
+Shelter lists, details, and image reads remain available to citizens. Shelter registration, updates, deletion, image uploads/deletion, and occupancy-history reads require a valid JWT for a `District Officer`. Public registration can create Citizen or Volunteer accounts; staff accounts must be provisioned through an authorized process.
+
 ## Run Shelter Feature Tests Across All Repositories
 
 From the backend repository, run:

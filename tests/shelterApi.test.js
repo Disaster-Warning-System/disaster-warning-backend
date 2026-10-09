@@ -12,12 +12,20 @@ jest.mock("../src/services/shelterImageStorageService", () => ({
 
 const express = require("express");
 const request = require("supertest");
+const jwt = require("jsonwebtoken");
 const Shelter = require("../src/models/Shelter");
 const shelterRoutes = require("../src/routes/shelterRoutes");
 
 const app = express();
 app.use(express.json());
 app.use("/api/shelters", shelterRoutes);
+process.env.JWT_SECRET = "shelter-tests-only-secret";
+const officerToken = jwt.sign({ id: "officer-1", role: "District Officer" }, process.env.JWT_SECRET);
+const citizenToken = jwt.sign({ id: "citizen-1", role: "Citizen" }, process.env.JWT_SECRET);
+
+function officerRequest(method, path) {
+  return request(app)[method](path).set("Authorization", `Bearer ${officerToken}`);
+}
 
 const payload = {
   name: "Central Community Hall",
@@ -45,7 +53,7 @@ beforeEach(() => {
 test("creates a shelter after validating required details", async () => {
   Shelter.create.mockResolvedValue(mockShelter());
 
-  const response = await request(app).post("/api/shelters").send(payload);
+  const response = await officerRequest("post", "/api/shelters").send(payload);
 
   expect(response.status).toBe(201);
   expect(response.body.success).toBe(true);
@@ -66,8 +74,7 @@ test("creates a shelter after validating required details", async () => {
 });
 
 test("returns actionable validation errors without creating invalid shelter data", async () => {
-  const response = await request(app)
-    .post("/api/shelters")
+  const response = await officerRequest("post", "/api/shelters")
     .send({ ...payload, occupancy: 121 });
 
   expect(response.status).toBe(400);
@@ -78,8 +85,7 @@ test("returns actionable validation errors without creating invalid shelter data
 });
 
 test("requires at least one field in an update request", async () => {
-  const response = await request(app)
-    .patch("/api/shelters/66b2a945df0fc2e72ea73123")
+  const response = await officerRequest("patch", "/api/shelters/66b2a945df0fc2e72ea73123")
     .send({});
 
   expect(response.status).toBe(400);
@@ -122,8 +128,7 @@ test("updates occupancy and operational status for a district update", async () 
     mockShelter({ occupancy: 80, operationalStatus: "Closed", availableSpaces: 40 }),
   );
 
-  const response = await request(app)
-    .patch("/api/shelters/66b2a945df0fc2e72ea73123")
+  const response = await officerRequest("patch", "/api/shelters/66b2a945df0fc2e72ea73123")
     .send({ occupancy: 80, operationalStatus: "Closed" });
 
   expect(response.status).toBe(200);
@@ -153,8 +158,7 @@ test("does not add occupancy history for an unrelated shelter edit", async () =>
   Shelter.findById.mockResolvedValue(mockShelter());
   Shelter.findByIdAndUpdate.mockResolvedValue(mockShelter({ remarks: "Checked" }));
 
-  const response = await request(app)
-    .patch("/api/shelters/66b2a945df0fc2e72ea73123")
+  const response = await officerRequest("patch", "/api/shelters/66b2a945df0fc2e72ea73123")
     .send({ remarks: "Checked" });
 
   expect(response.status).toBe(200);
@@ -172,7 +176,7 @@ test("returns occupancy and status history for a shelter", async () => {
     select: jest.fn().mockResolvedValue(mockShelter({ occupancyHistory: history })),
   });
 
-  const response = await request(app).get(
+  const response = await officerRequest("get",
     "/api/shelters/66b2a945df0fc2e72ea73123/history",
   );
 
@@ -192,7 +196,7 @@ test("returns occupancy and status history for a shelter", async () => {
 test("returns not found when requesting history for an unknown shelter", async () => {
   Shelter.findById.mockReturnValue({ select: jest.fn().mockResolvedValue(null) });
 
-  const response = await request(app).get(
+  const response = await officerRequest("get",
     "/api/shelters/66b2a945df0fc2e72ea73123/history",
   );
 
@@ -203,8 +207,7 @@ test("returns not found when requesting history for an unknown shelter", async (
 test("prevents updates that would exceed the current shelter capacity", async () => {
   Shelter.findById.mockResolvedValue(mockShelter());
 
-  const response = await request(app)
-    .patch("/api/shelters/66b2a945df0fc2e72ea73123")
+  const response = await officerRequest("patch", "/api/shelters/66b2a945df0fc2e72ea73123")
     .send({ occupancy: 121 });
 
   expect(response.status).toBe(400);
@@ -215,8 +218,7 @@ test("prevents updates that would exceed the current shelter capacity", async ()
 test("returns not found when an update targets an unknown shelter", async () => {
   Shelter.findById.mockResolvedValue(null);
 
-  const response = await request(app)
-    .patch("/api/shelters/66b2a945df0fc2e72ea73123")
+  const response = await officerRequest("patch", "/api/shelters/66b2a945df0fc2e72ea73123")
     .send({ operationalStatus: "Closed" });
 
   expect(response.status).toBe(404);
@@ -235,9 +237,7 @@ test("returns not found for an unknown shelter", async () => {
 test("deletes a shelter", async () => {
   Shelter.findByIdAndDelete.mockResolvedValue(mockShelter());
 
-  const response = await request(app).delete(
-    "/api/shelters/66b2a945df0fc2e72ea73123",
-  );
+  const response = await officerRequest("delete", "/api/shelters/66b2a945df0fc2e72ea73123");
 
   expect(response.status).toBe(200);
   expect(response.body.message).toBe("Shelter deleted successfully");
@@ -246,9 +246,7 @@ test("deletes a shelter", async () => {
 test("returns not found when deleting an unknown shelter", async () => {
   Shelter.findByIdAndDelete.mockResolvedValue(null);
 
-  const response = await request(app).delete(
-    "/api/shelters/66b2a945df0fc2e72ea73123",
-  );
+  const response = await officerRequest("delete", "/api/shelters/66b2a945df0fc2e72ea73123");
 
   expect(response.status).toBe(404);
   expect(response.body.message).toBe("Shelter not found");
@@ -262,7 +260,7 @@ test("maps model validation failures to actionable field errors", async () => {
   };
   Shelter.create.mockRejectedValue(validationError);
 
-  const response = await request(app).post("/api/shelters").send(payload);
+  const response = await officerRequest("post", "/api/shelters").send(payload);
 
   expect(response.status).toBe(400);
   expect(response.body.errors).toContain(
@@ -281,8 +279,45 @@ test.each([
   castError.path = path;
   Shelter.create.mockRejectedValue(castError);
 
-  const response = await request(app).post("/api/shelters").send(payload);
+  const response = await officerRequest("post", "/api/shelters").send(payload);
 
   expect(response.status).toBe(400);
   expect(response.body.errors[0]).toMatch(expectedMessage);
+});
+
+test("rejects shelter changes without a token or a District Officer role", async () => {
+  const anonymousResponse = await request(app).post("/api/shelters").send(payload);
+  const citizenResponse = await request(app)
+    .post("/api/shelters")
+    .set("Authorization", `Bearer ${citizenToken}`)
+    .send(payload);
+
+  expect(anonymousResponse.status).toBe(401);
+  expect(citizenResponse.status).toBe(403);
+  expect(Shelter.create).not.toHaveBeenCalled();
+});
+
+test.each([
+  ["patch", "/api/shelters/66b2a945df0fc2e72ea73123", { occupancy: 50 }],
+  ["delete", "/api/shelters/66b2a945df0fc2e72ea73123", undefined],
+  ["get", "/api/shelters/66b2a945df0fc2e72ea73123/history", undefined],
+])("requires an officer role for protected %s shelter operations", async (method, path, body) => {
+  const anonymousRequest = request(app)[method](path);
+  if (body) anonymousRequest.send(body);
+  const anonymousResponse = await anonymousRequest;
+  const citizenRequest = request(app)[method](path)
+    .set("Authorization", `Bearer ${citizenToken}`);
+  if (body) citizenRequest.send(body);
+  const citizenResponse = await citizenRequest;
+
+  expect(anonymousResponse.status).toBe(401);
+  expect(citizenResponse.status).toBe(403);
+});
+
+test("keeps shelter lists available to citizens", async () => {
+  Shelter.find.mockReturnValue({ sort: jest.fn().mockResolvedValue([mockShelter()]) });
+
+  const response = await request(app).get("/api/shelters");
+
+  expect(response.status).toBe(200);
 });

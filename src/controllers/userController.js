@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { userRoles } = require("../models/User");
+const selfServiceRoles = ["Citizen", "Volunteer"];
 
 const createToken = (user) =>
   jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
@@ -33,6 +34,13 @@ const register = async (req, res) => {
     return res.status(400).json({
       success: false,
       message: `role must be one of: ${userRoles.join(", ")}`,
+    });
+  }
+
+  if (role !== undefined && !selfServiceRoles.includes(role)) {
+    return res.status(403).json({
+      success: false,
+      message: "Staff accounts must be provisioned by an authorized administrator.",
     });
   }
 
