@@ -4,11 +4,12 @@ const {
   getHazardReports,
   getHazardReportById,
 } = require("../controllers/hazardReportController");
+const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.post("/", createHazardReport);
-router.get("/", getHazardReports);
-router.get("/:id", getHazardReportById);
+router.post("/", protect, createHazardReport);
+router.get("/", protect, getHazardReports);
+router.get("/:id", protect, getHazardReportById);
 
 module.exports = router;
