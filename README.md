@@ -12,6 +12,30 @@ Only JPEG, PNG, and WebP images with matching file signatures are accepted. The 
 
 Configure `MONGO_URI` and other server settings through the existing environment configuration. Do not commit credentials.
 
+## Issue Hazard Warning (Use Case 01)
+
+The warning workflow is available to a DMC Officer through the protected `/api/alerts` API:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/alerts` | Resolve recipients, persist a `Dispatching` alert, process SMS and Push independently, and persist the final status |
+| `GET` | `/api/alerts/feed` | Return `Dispatched` and `Partially Dispatched` alerts for the citizen feed |
+| `GET` | `/api/alerts/:alertId/delivery-details` | Return per-channel delivery logs for the officer dashboard |
+
+The create payload uses `hazardType`, `headline`, `instructions`, `severity`, `targetMode`, `targetAreas`, `languages`, and `channels`. Supported severities are `Advisory`, `Watch`, `Warning`, and `Evacuation Order`; supported target modes are `District` and `River Basin`; supported languages are `Sinhala`, `Tamil`, and `English`; supported channels are `SMS` and `Push`.
+
+Recipient resolution uses an explicitly simulated repository for development and tests. It is not a registry of real Sri Lankan citizens. Citizens are deduplicated by `citizenId` across overlapping target areas. An empty result returns HTTP 400 before an alert is created or an adapter is called.
+
+SMS and Push are independent simulated adapters. They use short configurable delays and deterministic `success`, `timeout`, and `failure` modes in unit tests; no real messages are sent. Retry behavior is bounded and retryable failures cannot leave an alert in `Dispatching`.
+
+Run the focused Issue Hazard Warning suite and coverage report with:
+
+```powershell
+npm run test:warning
+```
+
+The command covers the warning controller, routes, recipient resolver, and dispatch service. The general `npm test` command also runs the complete backend test suite, including unrelated existing features.
+
 If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the system DNS resolver, set `MONGO_DNS_SERVERS=1.1.1.1,1.0.0.1` in the local `.env` file. This optional setting changes DNS resolvers process-wide for this backend process; omit it when the default resolver works.
 
 ## Shelter Occupancy History
