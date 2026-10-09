@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const { protect, requireRole } = require("../middleware/authMiddleware");
 const {
   deleteShelterImage,
   getShelterImage,
@@ -19,7 +20,7 @@ const upload = multer({
   },
 });
 
-router.post("/", (req, res, next) => {
+router.post("/", protect, requireRole("District Officer"), (req, res, next) => {
   upload.single("file")(req, res, (error) => {
     if (error) {
       const isLimit = error.code === "LIMIT_FILE_SIZE";
@@ -34,6 +35,6 @@ router.post("/", (req, res, next) => {
   });
 }, uploadShelterImage);
 router.get("/:imageId", getShelterImage);
-router.delete("/:imageId", deleteShelterImage);
+router.delete("/:imageId", protect, requireRole("District Officer"), deleteShelterImage);
 
 module.exports = router;
