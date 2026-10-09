@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 require("dotenv").config();
 const connectDB = require("./config/database");
 const hazardReportRoutes = require("./routes/hazardReportRoutes");
@@ -30,6 +31,14 @@ app.use("/api/reports", verificationRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Disaster Warning System API is running" });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "disaster-warning-backend",
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  });
 });
 
 app.use(notFound);

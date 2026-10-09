@@ -1,6 +1,7 @@
 jest.mock('../src/models/Alert', () => ({
   create: jest.fn(),
   find: jest.fn(),
+  findOne: jest.fn(),
 }));
 jest.mock('../src/models/HazardReport', () => ({
   findById: jest.fn(),
@@ -139,7 +140,7 @@ test('continues to the next adapter when SMS fails and records a partial dispatc
   ]);
 });
 
-test('marks an alert partially dispatched when every selected delivery channel fails', async () => {
+test('marks an alert failed when every selected delivery channel fails', async () => {
   dispatchSMS.mockRejectedValueOnce(new Error('SMS offline'));
   dispatchPush.mockRejectedValueOnce(new Error('Push offline'));
 
@@ -149,7 +150,7 @@ test('marks an alert partially dispatched when every selected delivery channel f
     .send(payload);
 
   expect(response.status).toBe(201);
-  expect(response.body.alert.status).toBe('Partially Dispatched');
+  expect(response.body.alert.status).toBe('Failed');
   expect(response.body.alert.deliveryLogs).toHaveLength(2);
 });
 
@@ -191,4 +192,55 @@ test('returns a server error when active alerts cannot be loaded', async () => {
 
   expect(response.status).toBe(500);
   expect(response.body.error).toBe('Database unavailable');
+});
+
+test('returns the citizen feed with only dispatchable alerts', async () => {
+  const feed = [{ alertId: 'ALT-feed', status: 'Dispatched' }];
+  const sort = jest.fn().mockResolvedValue(feed);
+  Alert.find.mockReturnValueOnce({ sort });
+
+  const response = await request(app)
+    .get('/api/alerts/feed')
+    .set('Authorization', `Bearer ${officerToken}`)
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ alerts: feed, count: 1 });
+  expect(Alert.find).toHaveBeenCalledWith({
+    status: { $in: ['Dispatched', 'Partially Dispatched'] },
+  });
+});
+
+test('returns delivery details for an existing alert', async () => {
+  const alert = {
+    alertId: 'ALT-details',
+    status: 'Partially Dispatched',
+    recipientCount: 3,
+    dispatchStartedAt: new Date('2025-01-01T00:00:00.000Z'),
+    dispatchedAt: new Date('2025-01-01T00:01:00.000Z'),
+    deliveryLogs: [{ channel: 'SMS', status: 'Failed' }],
+  };
+  Alert.findOne.mockResolvedValueOnce(alert);
+
+  const response = await request(app)
+    .get('/api/alerts/ALT-details/delivery-details')
+    .set('Authorization', `Bearer ${officerToken}`)
+
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({
+    alertId: 'ALT-details',
+    status: 'Partially Dispatched',
+    recipientCount: 3,
+    deliveryLogs: alert.deliveryLogs,
+  });
+});
+
+test('returns 404 when delivery details do not exist', async () => {
+  Alert.findOne.mockResolvedValueOnce(null);
+
+  const response = await request(app)
+    .get('/api/alerts/ALT-missing/delivery-details')
+    .set('Authorization', `Bearer ${officerToken}`)
+
+  expect(response.status).toBe(404);
+  expect(response.body.message).toBe('Alert not found.');
 });

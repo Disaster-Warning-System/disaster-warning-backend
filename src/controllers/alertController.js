@@ -1,42 +1,85 @@
 const Alert = require('../models/Alert');
 const mongoose = require('mongoose');
 const HazardReport = require('../models/HazardReport');
-const { resolveRecipients } = require('../services/recipientResolver');
-const { dispatchSMS } = require('../adapters/smsAdapter');
-const { dispatchPush } = require('../adapters/pushAdapter');
+const {
+    RecipientResolutionError,
+    resolveRecipients,
+} = require('../services/recipientResolver');
+const { dispatchAlertChannels } = require('../services/alertDispatchService');
 
 const allowedSeverities = ['Advisory', 'Watch', 'Warning', 'Evacuation Order'];
 const allowedChannels = ['SMS', 'Push'];
+const allowedTargetModes = ['District', 'River Basin'];
+
+const getPayload = (body = {}) => ({
+    ...body,
+    requestedChannels: body.selectedDeliveryChannels || body.channels,
+    warningInstructions: body.instructions || body.instruction,
+});
+
+const validatePayload = ({
+    hazardType,
+    headline,
+    warningInstructions,
+    severity,
+    targetMode,
+    targetAreas,
+    requestedChannels,
+}) => (
+    (hazardType !== undefined && (typeof hazardType !== 'string' || !hazardType.trim())) ||
+    typeof headline !== 'string' ||
+    !headline.trim() ||
+    typeof warningInstructions !== 'string' ||
+    !warningInstructions.trim() ||
+    !allowedSeverities.includes(severity) ||
+    (targetMode !== undefined && !allowedTargetModes.includes(targetMode)) ||
+    !Array.isArray(targetAreas) ||
+    targetAreas.length === 0 ||
+    targetAreas.some((area) => typeof area !== 'string' || !area.trim()) ||
+    !Array.isArray(requestedChannels) ||
+    requestedChannels.length === 0 ||
+    requestedChannels.some((channel) => !allowedChannels.includes(channel))
+);
+
+const persistFailureState = async (alert, error) => {
+    try {
+        alert.status = 'Failed';
+        alert.deliveryLogs = [{
+            channel: 'System',
+            status: 'Failed',
+            outcome: 'Failed',
+            attempts: 1,
+            reason: error.message || 'Dispatch processing failed.',
+            errorDetails: {
+                code: error.code || 'DISPATCH_PROCESSING_FAILURE',
+                message: error.message || 'Dispatch processing failed.',
+                recovery: 'Alert marked Failed after an unexpected processing error.',
+            },
+            timestamp: new Date(),
+        }];
+        alert.dispatchedAt = new Date();
+        await alert.save();
+    } catch (persistenceError) {
+        console.error('Unable to persist failed alert state:', persistenceError);
+    }
+};
 
 const createAlert = async (req, res) => {
+    let alert;
     try {
-        const { headline, instruction, severity, targetAreas, channels, sourceReportId } = req.body || {};
-
-        if (
-            typeof headline !== 'string' ||
-            !headline.trim() ||
-            typeof instruction !== 'string' ||
-            !instruction.trim() ||
-            !allowedSeverities.includes(severity) ||
-            !Array.isArray(targetAreas) ||
-            targetAreas.length === 0 ||
-            targetAreas.some((area) => typeof area !== 'string' || !area.trim()) ||
-            !Array.isArray(channels) ||
-            channels.length === 0 ||
-            channels.some((channel) => !allowedChannels.includes(channel))
-        ) {
+        const payload = getPayload(req.body);
+        if (validatePayload(payload)) {
             return res.status(400).json({
-                message: 'Headline, instruction, valid severity, target areas, and delivery channels are required.',
+                message: 'Hazard type, headline, instructions, valid severity, target areas, and delivery channels are required.',
             });
         }
 
         let verifiedReportId = null;
-        if (sourceReportId !== undefined && sourceReportId !== null && sourceReportId !== '') {
-            if (!mongoose.isValidObjectId(sourceReportId)) {
+        if (payload.sourceReportId !== undefined && payload.sourceReportId !== null && payload.sourceReportId !== '') {
+            if (!mongoose.isValidObjectId(payload.sourceReportId)) {
                 return res.status(400).json({ message: 'The source hazard report is invalid.' });
             }
-
-            const sourceReport = await HazardReport.findById(sourceReportId).select('_id status');
+            const sourceReport = await HazardReport.findById(payload.sourceReportId).select('_id status');
             if (!sourceReport) {
                 return res.status(404).json({ message: 'The source hazard report was not found.' });
             }
@@ -48,66 +91,62 @@ const createAlert = async (req, res) => {
             verifiedReportId = sourceReport._id;
         }
 
-        const normalizedTargetAreas = [...new Set(targetAreas.map((area) => area.trim()))];
-        const normalizedChannels = [...new Set(channels)];
-        const recipients = resolveRecipients(normalizedTargetAreas);
+        const normalizedTargetAreas = [...new Set(payload.targetAreas.map((area) => area.trim()))];
+        const normalizedChannels = [...new Set(payload.requestedChannels)];
+        const resolvedRecipients = resolveRecipients(normalizedTargetAreas);
+        const recipients = resolvedRecipients instanceof Set
+            ? resolvedRecipients
+            : new Set(resolvedRecipients.recipients.map((recipient) => recipient.citizenId));
         if (recipients.size === 0) {
             return res.status(400).json({ message: 'No citizens registered in selected areas. Dispatch aborted.' });
         }
 
-        const alert = await Alert.create({
+        alert = await Alert.create({
             alertId: `ALT-${Date.now()}`,
             sourceReportId: verifiedReportId,
-            severity,
-            headline: headline.trim(),
-            instruction: instruction.trim(),
+            hazardType: typeof payload.hazardType === 'string' && payload.hazardType.trim()
+                ? payload.hazardType.trim()
+                : 'General',
+            severity: payload.severity,
+            headline: payload.headline.trim(),
+            instructions: payload.warningInstructions.trim(),
+            instruction: payload.warningInstructions.trim(),
+            targetMode: payload.targetMode || 'District',
             targetAreas: normalizedTargetAreas,
+            selectedDeliveryChannels: normalizedChannels,
             channels: normalizedChannels,
+            recipientCount: recipients.size,
             status: 'Dispatching',
+            dispatchStartedAt: new Date(),
         });
 
-        const deliveryLogs = [];
-        let hasFailures = false;
-
-        for (const channel of normalizedChannels) {
-            if (channel === 'SMS') {
-                try {
-                    const result = await dispatchSMS(alert.alertId, recipients.size);
-                    deliveryLogs.push(result);
-                } catch (error) {
-                    deliveryLogs.push({
-                        channel,
-                        status: 'Failed',
-                        reason: error.message || 'SMS delivery failed.',
-                    });
-                    hasFailures = true;
-                }
-            } else if (channel === 'Push') {
-                try {
-                    const bypassSilent = severity === 'Warning' || severity === 'Evacuation Order';
-                    const result = await dispatchPush(alert.alertId, recipients.size, bypassSilent);
-                    deliveryLogs.push(result);
-                } catch (error) {
-                    deliveryLogs.push({
-                        channel,
-                        status: 'Failed',
-                        reason: error.message || 'Push delivery failed.',
-                    });
-                    hasFailures = true;
-                }
-            }
-        }
-
-        alert.status = hasFailures ? 'Partially Dispatched' : 'Dispatched';
-        alert.deliveryLogs = deliveryLogs;
+        const dispatch = await dispatchAlertChannels({
+            warningId: alert.alertId,
+            recipients,
+            channels: normalizedChannels,
+            severity: payload.severity,
+        });
+        alert.status = dispatch.status;
+        alert.deliveryLogs = dispatch.deliveryLogs;
+        alert.dispatchedAt = new Date();
         await alert.save();
 
         return res.status(201).json({
-            message: 'Dispatch complete',
-            alert,
+            message: 'Dispatch processed',
+            alertId: alert.alertId,
+            status: alert.status,
+            recipientCount: recipients.size,
             recipientsReached: recipients.size,
+            deliveryLogs: alert.deliveryLogs,
+            alert,
         });
     } catch (error) {
+        if (RecipientResolutionError && error instanceof RecipientResolutionError) {
+            return res.status(400).json({ message: error.message });
+        }
+        if (alert) {
+            await persistFailureState(alert, error);
+        }
         return res.status(500).json({ message: 'Server Error', error: error.message });
     }
 };
@@ -121,4 +160,39 @@ const getAlerts = async (req, res) => {
     }
 };
 
-module.exports = { createAlert, getAlerts };
+const getCitizenFeed = async (req, res) => {
+    try {
+        const alerts = await Alert.find({
+            status: { $in: ['Dispatched', 'Partially Dispatched'] },
+        }).sort({ issuedAt: -1 });
+        return res.status(200).json({ alerts, count: alerts.length });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server Error', error: error.message });
+    }
+};
+
+const getDeliveryDetails = async (req, res) => {
+    try {
+        const alert = await Alert.findOne({ alertId: req.params.alertId });
+        if (!alert) {
+            return res.status(404).json({ message: 'Alert not found.' });
+        }
+        return res.status(200).json({
+            alertId: alert.alertId,
+            status: alert.status,
+            recipientCount: alert.recipientCount,
+            dispatchStartedAt: alert.dispatchStartedAt,
+            dispatchedAt: alert.dispatchedAt,
+            deliveryLogs: alert.deliveryLogs,
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Server Error', error: error.message });
+    }
+};
+
+module.exports = {
+    createAlert,
+    getAlerts,
+    getCitizenFeed,
+    getDeliveryDetails,
+};
