@@ -4,29 +4,21 @@
   "description": "",
   "main": "src/server.js",
   "scripts": {
-    "test": "jest --runInBand --coverage --coverageReporters=text --collectCoverageFrom=\"src/controllers/**/*.js\" --collectCoverageFrom=\"src/services/**/*.js\" --collectCoverageFrom=\"src/routes/**/*.js\"",
-    "test:warning": "jest tests/alertController.test.js tests/alertDispatchService.test.js tests/recipientResolver.test.js --runInBand --coverage --coverageReporters=text --coverageReporters=json-summary --collectCoverageFrom=\"src/controllers/alertController.js\" --collectCoverageFrom=\"src/services/alertDispatchService.js\" --collectCoverageFrom=\"src/services/recipientResolver.js\" --collectCoverageFrom=\"src/routes/alertRoutes.js\"",
-    "test:shelter:all": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-shelter-feature.ps1",
+    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "seed": "node src/seed/seed.js",
-    "seed:shelters:demo": "node src/seed/seedDemoShelters.js"
+    "dev": "nodemon src/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
-    "dotenv": "^18.0.6",
+    "dotenv": "^18.0.5",
     "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.11.0",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "mongoose": "^9.11.0"
   },
   "devDependencies": {
-    "jest": "^30.2.0",
-    "nodemon": "^3.1.14",
-    "supertest": "^7.1.4"
+    "nodemon": "^3.1.14"
   }
 }

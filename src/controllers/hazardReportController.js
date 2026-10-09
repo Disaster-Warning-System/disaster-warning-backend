@@ -13,21 +13,8 @@ const createHazardReport = async (req, res) => {
     });
   }
 
-  const idempotencyKey = req.get("Idempotency-Key")?.trim();
-
   try {
-    const { hazardType, description, severity, location, photoFileId, evidence } = req.body;
-    if (idempotencyKey) {
-      const existingReport = await HazardReport.findOne({ idempotencyKey });
-      if (existingReport) {
-        return res.status(201).json({
-          success: true,
-          message: "Hazard report submitted successfully",
-          report: existingReport,
-          data: existingReport,
-        });
-      }
-    }
+    const { hazardType, description, location, photoFileId, reportedBy } = req.body;
     let storedPhotoFileId = null;
     if (photoFileId !== undefined && photoFileId !== null) {
       if (!mongoose.isValidObjectId(photoFileId) || !(await findFile(photoFileId))) {
@@ -41,42 +28,23 @@ const createHazardReport = async (req, res) => {
     const hazardReport = await HazardReport.create({
       hazardType,
       description: description.trim(),
-      severity: severity ?? "Medium",
       location: {
         latitude: location.latitude ?? null,
         longitude: location.longitude ?? null,
         address:
           typeof location.address === "string" ? location.address.trim() : "",
-        district:
-          typeof location.district === "string" ? location.district.trim() : "",
       },
       photoFileId: storedPhotoFileId,
-      evidence: Array.isArray(evidence)
-        ? evidence.map((item) => ({ url: item.url.trim(), type: item.type || "image" }))
-        : [],
-      reportedBy: req.user.id,
-      idempotencyKey: idempotencyKey || undefined,
+      reportedBy: reportedBy ?? null,
       status: "Pending Verification",
     });
 
     return res.status(201).json({
       success: true,
       message: "Hazard report submitted successfully",
-      report: hazardReport,
       data: hazardReport,
     });
   } catch (error) {
-    if (error?.code === 11000 && idempotencyKey) {
-      const existingReport = await HazardReport.findOne({ idempotencyKey });
-      if (existingReport) {
-        return res.status(201).json({
-          success: true,
-          message: "Hazard report submitted successfully",
-          report: existingReport,
-          data: existingReport,
-        });
-      }
-    }
     if (error instanceof mongoose.Error.ValidationError) {
       return res.status(400).json({
         success: false,
@@ -94,7 +62,7 @@ const createHazardReport = async (req, res) => {
 
 const getHazardReports = async (req, res) => {
   try {
-    const reports = await HazardReport.find({ reportedBy: req.user.id }).sort({ createdAt: -1 });
+    const reports = await HazardReport.find().sort({ createdAt: -1 });
     return res.status(200).json({
       success: true,
       count: reports.length,
@@ -118,10 +86,7 @@ const getHazardReportById = async (req, res) => {
   }
 
   try {
-    const report = await HazardReport.findOne({
-      _id: req.params.id,
-      reportedBy: req.user.id,
-    });
+    const report = await HazardReport.findById(req.params.id);
     if (!report) {
       return res.status(404).json({
         success: false,
