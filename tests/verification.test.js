@@ -201,7 +201,7 @@ describe("POST /api/reports/:id/verification", () => {
       request(app)
         .post(`/api/reports/${report._id}/verification`)
         .set(auth(officer))
-        .send({ decision, remarks });
+        .send({ decision, remarks, checklist: { locationChecked: true } });
 
     const responses = await Promise.all([decide("Verified"), decide("Rejected", "Duplicate")]);
 
@@ -217,12 +217,134 @@ describe("POST /api/reports/:id/verification", () => {
     const response = await request(app)
       .post(`/api/reports/${report._id}/verification`)
       .set(auth(officer))
-      .send({ decision: "Rejected", remarks: "Not a hazard" });
+      .send({ decision: "Rejected", remarks: "Not a hazard", severity: "Low" });
 
     expect(response.status).toBe(500);
     const reloaded = await HazardReport.findById(report._id);
     expect(reloaded.status).toBe("Pending Verification");
     expect(reloaded.rejectionReason).toBe("");
+    expect(reloaded.severity).toBe("Medium");
+  });
+});
+
+describe("officer review checklist and severity", () => {
+  const verify = (report, body) =>
+    request(app)
+      .post(`/api/reports/${report._id}/verification`)
+      .set(auth(officer))
+      .send({ decision: "Verified", ...body });
+
+  test("verifying requires the officer to confirm the location was checked", async () => {
+    const report = await createReport();
+    const response = await verify(report, { checklist: { evidenceReviewed: true } });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/location/);
+  });
+
+  test("verifying a report with evidence requires the evidence to be reviewed", async () => {
+    const report = await createReport({ evidence: [{ url: "https://example.lk/photo.jpg" }] });
+
+    const missing = await verify(report, { checklist: { locationChecked: true } });
+    expect(missing.status).toBe(400);
+    expect(missing.body.message).toMatch(/evidence/);
+
+    const complete = await verify(report, {
+      checklist: { locationChecked: true, evidenceReviewed: true },
+    });
+    expect(complete.status).toBe(200);
+  });
+
+  test("rejecting does not need the checklist", async () => {
+    const report = await createReport();
+    const response = await request(app)
+      .post(`/api/reports/${report._id}/verification`)
+      .set(auth(officer))
+      .send({ decision: "Rejected", remarks: "Old photo from 2016" });
+    expect(response.status).toBe(200);
+  });
+
+  test("rejects unknown checklist items, non-boolean values and invalid severity", async () => {
+    const report = await createReport();
+    for (const body of [
+      { checklist: { locationChecked: true, guessed: true } },
+      { checklist: { locationChecked: "yes" } },
+      { checklist: [] },
+      { checklist: { locationChecked: true }, severity: "Extreme" },
+    ]) {
+      expect((await verify(report, body)).status).toBe(400);
+    }
+    expect((await HazardReport.findById(report._id)).status).toBe("Pending Verification");
+  });
+
+  test("stores the checklist and the severity the officer set", async () => {
+    const report = await createReport({ severity: "Medium" });
+    const checklist = { locationChecked: true, duplicatesChecked: true };
+
+    const response = await verify(report, { checklist, severity: "High" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.report.severity).toBe("High");
+    expect(response.body.data.verification).toMatchObject({
+      severity: "High",
+      checklist: { ...checklist, evidenceReviewed: false },
+    });
+  });
+
+  test("records the report's current severity when the officer keeps it", async () => {
+    const report = await createReport({ severity: "Low" });
+    const response = await verify(report, { checklist: { locationChecked: true } });
+    expect(response.body.data.verification.severity).toBe("Low");
+  });
+});
+
+describe("report and photo access", () => {
+  const tinyPng = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  const uploadPhoto = async () => {
+    const response = await request(app)
+      .post("/api/uploads/hazard-photo")
+      .attach("file", tinyPng, { filename: "photo.png", contentType: "image/png" });
+    expect(response.status).toBe(201);
+    return response.body.fileId;
+  };
+
+  test("only officers can list every report", async () => {
+    await createReport();
+    expect((await request(app).get("/api/hazard-reports")).status).toBe(401);
+    expect((await request(app).get("/api/hazard-reports").set(auth(citizen))).status).toBe(403);
+    expect((await request(app).get("/api/hazard-reports").set(auth(officer))).status).toBe(200);
+  });
+
+  test("a report is visible to its reporter and officers only", async () => {
+    const report = await createReport();
+    const url = `/api/hazard-reports/${report._id}`;
+    expect((await request(app).get(url)).status).toBe(401);
+    expect((await request(app).get(url).set(auth(citizen))).status).toBe(200);
+    expect((await request(app).get(url).set(auth(officer))).status).toBe(200);
+    expect((await request(app).get(url).set(auth(otherCitizen))).status).toBe(404);
+  });
+
+  test("an unused upload can be deleted but report evidence cannot", async () => {
+    const unusedId = await uploadPhoto();
+    expect((await request(app).delete(`/api/uploads/hazard-photo/${unusedId}`)).status).toBe(204);
+
+    const attachedId = await uploadPhoto();
+    await createReport({ photoFileId: attachedId });
+    const response = await request(app).delete(`/api/uploads/hazard-photo/${attachedId}`);
+    expect(response.status).toBe(409);
+    expect((await request(app).get(`/api/uploads/hazard-photo/${attachedId}`)).status).toBe(200);
+  });
+
+  test("photos sent with a Needs More Information reply are protected too", async () => {
+    const photoId = await uploadPhoto();
+    await createReport({
+      status: "Needs More Information",
+      additionalInfo: [{ message: "Here is a photo", photoFileId: photoId }],
+    });
+    const response = await request(app).delete(`/api/uploads/hazard-photo/${photoId}`);
+    expect(response.status).toBe(409);
   });
 });
 
