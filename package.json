@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "test": "jest --runInBand --coverage --coverageReporters=text --collectCoverageFrom=\"src/controllers/**/*.js\" --collectCoverageFrom=\"src/services/**/*.js\" --collectCoverageFrom=\"src/routes/**/*.js\"",
+    "test:shelter:all": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-shelter-feature.ps1",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seed/seed.js",
