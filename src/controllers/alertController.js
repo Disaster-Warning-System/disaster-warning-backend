@@ -1,4 +1,6 @@
 const Alert = require('../models/Alert');
+const mongoose = require('mongoose');
+const HazardReport = require('../models/HazardReport');
 const { resolveRecipients } = require('../services/recipientResolver');
 const { dispatchSMS } = require('../adapters/smsAdapter');
 const { dispatchPush } = require('../adapters/pushAdapter');
@@ -8,7 +10,7 @@ const allowedChannels = ['SMS', 'Push'];
 
 const createAlert = async (req, res) => {
     try {
-        const { headline, instruction, severity, targetAreas, channels } = req.body || {};
+        const { headline, instruction, severity, targetAreas, channels, sourceReportId } = req.body || {};
 
         if (
             typeof headline !== 'string' ||
@@ -28,6 +30,24 @@ const createAlert = async (req, res) => {
             });
         }
 
+        let verifiedReportId = null;
+        if (sourceReportId !== undefined && sourceReportId !== null && sourceReportId !== '') {
+            if (!mongoose.isValidObjectId(sourceReportId)) {
+                return res.status(400).json({ message: 'The source hazard report is invalid.' });
+            }
+
+            const sourceReport = await HazardReport.findById(sourceReportId).select('_id status');
+            if (!sourceReport) {
+                return res.status(404).json({ message: 'The source hazard report was not found.' });
+            }
+            if (sourceReport.status !== 'Verified') {
+                return res.status(409).json({
+                    message: 'Only verified hazard reports can be used to issue a warning.',
+                });
+            }
+            verifiedReportId = sourceReport._id;
+        }
+
         const normalizedTargetAreas = [...new Set(targetAreas.map((area) => area.trim()))];
         const normalizedChannels = [...new Set(channels)];
         const recipients = resolveRecipients(normalizedTargetAreas);
@@ -37,6 +57,7 @@ const createAlert = async (req, res) => {
 
         const alert = await Alert.create({
             alertId: `ALT-${Date.now()}`,
+            sourceReportId: verifiedReportId,
             severity,
             headline: headline.trim(),
             instruction: instruction.trim(),

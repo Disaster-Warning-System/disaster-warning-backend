@@ -22,6 +22,12 @@ const deliveryLogSchema = new mongoose.Schema(
 const alertSchema = new mongoose.Schema(
   {
     alertId: { type: String, required: true, unique: true, index: true },
+    sourceReportId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'HazardReport',
+      default: null,
+      index: true,
+    },
     headline: { type: String, required: true, trim: true },
     instruction: { type: String, required: true, trim: true },
     severity: {
