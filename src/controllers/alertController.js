@@ -9,6 +9,7 @@ const { dispatchAlertChannels } = require('../services/alertDispatchService');
 
 const allowedSeverities = ['Advisory', 'Watch', 'Warning', 'Evacuation Order'];
 const allowedChannels = ['SMS', 'Push'];
+const allowedLanguages = ['Sinhala', 'Tamil', 'English'];
 const allowedTargetModes = ['District', 'River Basin'];
 
 const getPayload = (body = {}) => ({
@@ -25,6 +26,7 @@ const validatePayload = ({
     targetMode,
     targetAreas,
     requestedChannels,
+    languages,
 }) => (
     (hazardType !== undefined && (typeof hazardType !== 'string' || !hazardType.trim())) ||
     typeof headline !== 'string' ||
@@ -38,7 +40,12 @@ const validatePayload = ({
     targetAreas.some((area) => typeof area !== 'string' || !area.trim()) ||
     !Array.isArray(requestedChannels) ||
     requestedChannels.length === 0 ||
-    requestedChannels.some((channel) => !allowedChannels.includes(channel))
+    requestedChannels.some((channel) => !allowedChannels.includes(channel)) ||
+    (languages !== undefined && (
+        !Array.isArray(languages) ||
+        languages.length === 0 ||
+        languages.some((language) => !allowedLanguages.includes(language))
+    ))
 );
 
 const persistFailureState = async (alert, error) => {
@@ -70,7 +77,7 @@ const createAlert = async (req, res) => {
         const payload = getPayload(req.body);
         if (validatePayload(payload)) {
             return res.status(400).json({
-                message: 'Hazard type, headline, instructions, valid severity, target areas, and delivery channels are required.',
+                message: 'Hazard type, headline, instructions, valid severity, target areas, delivery channels, and languages are required.',
             });
         }
 
@@ -115,6 +122,7 @@ const createAlert = async (req, res) => {
             targetAreas: normalizedTargetAreas,
             selectedDeliveryChannels: normalizedChannels,
             channels: normalizedChannels,
+            languages: payload.languages || ['English'],
             recipientCount: recipients.size,
             status: 'Dispatching',
             dispatchStartedAt: new Date(),

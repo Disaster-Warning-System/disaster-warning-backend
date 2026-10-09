@@ -41,6 +41,7 @@ const payload = {
   instruction: 'Move to higher ground',
   severity: 'Warning',
   targetAreas: ['Colombo', 'Gampaha'],
+  languages: ['English'],
   channels: ['SMS', 'Push'],
 };
 
@@ -103,6 +104,7 @@ test.each([
   [{ ...payload, targetAreas: [] }],
   [{ ...payload, channels: [] }],
   [{ ...payload, channels: ['Email'] }],
+  [{ ...payload, languages: ['French'] }],
 ])('rejects invalid alert input: %j', async (invalidPayload) => {
   const response = await request(app)
     .post('/api/alerts')

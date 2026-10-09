@@ -64,6 +64,10 @@ const alertSchema = new mongoose.Schema(
     selectedDeliveryChannels: { type: [String], default: [] },
     // Retained for compatibility with existing clients.
     channels: { type: [String], required: true },
+    languages: {
+      type: [{ type: String, enum: ['Sinhala', 'Tamil', 'English'] }],
+      default: ['English'],
+    },
     recipientCount: { type: Number, min: 0, default: 0 },
     status: {
       type: String,
