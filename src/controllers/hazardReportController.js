@@ -16,7 +16,7 @@ const createHazardReport = async (req, res) => {
   const idempotencyKey = req.get("Idempotency-Key")?.trim();
 
   try {
-    const { hazardType, description, severity, location, photoFileId, evidence, reportedBy } = req.body;
+    const { hazardType, description, severity, location, photoFileId, evidence } = req.body;
     if (idempotencyKey) {
       const existingReport = await HazardReport.findOne({ idempotencyKey });
       if (existingReport) {
@@ -54,7 +54,7 @@ const createHazardReport = async (req, res) => {
       evidence: Array.isArray(evidence)
         ? evidence.map((item) => ({ url: item.url.trim(), type: item.type || "image" }))
         : [],
-      reportedBy: reportedBy ?? null,
+      reportedBy: req.user.id,
       idempotencyKey: idempotencyKey || undefined,
       status: "Pending Verification",
     });
@@ -94,7 +94,7 @@ const createHazardReport = async (req, res) => {
 
 const getHazardReports = async (req, res) => {
   try {
-    const reports = await HazardReport.find().sort({ createdAt: -1 });
+    const reports = await HazardReport.find({ reportedBy: req.user.id }).sort({ createdAt: -1 });
     return res.status(200).json({
       success: true,
       count: reports.length,
@@ -118,7 +118,10 @@ const getHazardReportById = async (req, res) => {
   }
 
   try {
-    const report = await HazardReport.findById(req.params.id);
+    const report = await HazardReport.findOne({
+      _id: req.params.id,
+      reportedBy: req.user.id,
+    });
     if (!report) {
       return res.status(404).json({
         success: false,
