@@ -12,13 +12,60 @@ Only JPEG, PNG, and WebP images with matching file signatures are accepted. The 
 
 Configure `MONGO_URI` and other server settings through the existing environment configuration. Do not commit credentials.
 
+## Issue Hazard Warning (Use Case 01)
+
+The warning workflow is available to a DMC Officer through the protected `/api/alerts` API:
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/alerts` | Resolve recipients, persist a `Dispatching` alert, process SMS and Push independently, and persist the final status |
+| `POST` | `/api/alerts/preview` | Resolve registered recipients and check configured minimums and overlapping active warnings |
+| `POST/GET` | `/api/alerts/drafts` | Persist and list the signed-in officer's drafts |
+| `GET/PUT/DELETE` | `/api/alerts/drafts/:alertId` | Read, update, or delete that officer's draft |
+| `GET` | `/api/alerts/feed` | Authenticated Citizen/Volunteer feed filtered by the account's district and subscribed river basins |
+| `GET` | `/api/alerts/:alertId/delivery-details` | Return per-channel provider outcomes for the officer dashboard |
+
+The create payload uses `hazardType`, `headline`, `instructions`, `severity`, `targetMode`, `targetAreas`, `languages`, and `channels`. Supported severities are `Advisory`, `Watch`, `Warning`, and `Evacuation Order`; supported target modes are `District` and `River Basin`; supported languages are `Sinhala`, `Tamil`, and `English`; supported channels are `SMS` and `Push`.
+
+Recipient resolution queries registered Citizen and Volunteer accounts in MongoDB and deduplicates by account ID across all selected target areas. District targeting supports all 25 districts. River-basin targeting supports the 103 basin labels in the Irrigation Department's Hydrological Annual 2021/22; users select their basin subscriptions during registration or later in Profile. The boundary GIS layer is not included, so targeting and registration match selected official basin labels rather than deriving basin membership from a citizen's coordinates. Empty recipient sets block dispatch. Minimum counts and the conflict time window are configurable through the `ALERT_MIN_RECIPIENTS_*` and `ALERT_CONFLICT_WINDOW_MINUTES` environment variables; the defaults are policy placeholders and should be set to the DMC's approved values.
+
+SMS and Push are independent adapters. SMS defaults to Brevo: set `SMS_PROVIDER=brevo`, `BREVO_API_KEY`, and `BREVO_SMS_SENDER`. Brevo sender IDs and account access must be enabled for the destination country; SMS credits are purchased through Brevo. To use Text.lk instead, set `SMS_PROVIDER=textlk`, `TEXTLK_API_KEY`, and `TEXTLK_SENDER_ID`. Text.lk advertises a demo sender and 10 free test SMS, but says some demo sends may be simulated; verify receipt before relying on it for a presentation. Its demo is not production delivery. The backend records provider acceptance/response, not guaranteed handset receipt. Push uses Expo Push Service and registered device tokens; `EXPO_ACCESS_TOKEN` is optional. Without provider configuration, that channel is recorded as failed, and other selected channels continue. Provider secrets belong only in the backend `.env` and must never be placed in either frontend.
+
+Mobile accounts need a verified district and Expo push token to receive matching push warnings. Existing accounts can update district, basin subscriptions, and phone through the mobile Profile screen. SMS is sent only to accounts with a phone number in international E.164 format. Expo remote push requires an EAS project ID in `EXPO_PUBLIC_EAS_PROJECT_ID` (or Expo config) and a development/production build; Expo Go does not provide remote push testing on Android for the current SDK. The citizen feed remains available through authenticated polling at `GET /api/alerts/feed`.
+
+Run the focused Issue Hazard Warning suite and coverage report with:
+
+```powershell
+npm run test:warning
+```
+
+The focused command covers warning validation/dispatch, recipient lookup and deduplication, Brevo/Text.lk and Expo adapter outcomes, area profile updates, push-token registration, and role-protected API routes. It reports focused feature coverage. The general `npm test` command also runs the complete backend test suite, including unrelated existing features.
+
+If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the system DNS resolver, set `MONGO_DNS_SERVERS=1.1.1.1,1.0.0.1` in the local `.env` file. This optional setting changes DNS resolvers process-wide for this backend process; omit it when the default resolver works.
+
+## Shelter Occupancy History
+
+`GET /api/shelters/:id/history` returns the shelter name and capacity with its recorded occupancy and operational-status snapshots. New shelters get an initial snapshot; later occupancy or status changes are recorded atomically with the shelter update. The system retains the most recent 100 snapshots per shelter. Records created before history tracking was added do not have reconstructable historical entries.
+
+Shelter lists, details, and image reads remain available to citizens. Shelter registration, updates, deletion, image uploads/deletion, and occupancy-history reads require a valid JWT for a `District Officer`. Public registration can create Citizen or Volunteer accounts; staff accounts must be provisioned through an authorized process.
+
+## Run Shelter Feature Tests Across All Repositories
+
+From the backend repository, run:
+
+```powershell
+npm run test:shelter:all
+```
+
+This runs the shelter API, validator, and capacity-model tests in the backend, plus the test suites in the admin and mobile repositories. The admin suite includes unit tests for shelter API client create, read, update, and delete requests, the full-capacity status label, form validation, and save workflow rules. The three repositories must be present as sibling folders in the same `GitHub` directory, and each repository's dependencies must be installed. The command returns a failure status if any repository's tests fail.
+
 ## Verify Hazard Report (Component 2)
 
 DMC Duty Officers review pending hazard reports and mark them as Verified, Rejected or Needs More Information. Only the officer makes this decision; the system never changes a report's status on its own.
 
 ### Running
 
-1. Copy `.env.example` to `.env` and set `MONGO_URI`, `JWT_SECRET` and `PORT`.
+1. Copy `.env.example` to `.env` and set `MONGO_URI`, `JWT_SECRET`, `PORT`, and `CORS_ORIGINS` as needed. `CORS_ORIGINS` is a comma-separated list of browser origins; the defaults allow the admin app and Expo web development ports.
 2. `npm install`
 3. `npm run seed` adds 2 DMC officers, 2 citizens and 12 sample reports. It only replaces its own seed data, so other data in the database is kept.
 4. `npm run dev` (or `npm start`)
@@ -29,10 +76,10 @@ Seed logins (password `password123`): `officer@dmc.lk`, `officer2@dmc.lk`, `citi
 
 | Method | Endpoint | Body |
 | --- | --- | --- |
-| POST | `/api/auth/register` | `{ name, email, password, role?, district? }` |
-| POST | `/api/auth/login` | `{ email, password }` → `{ token, user }` |
+| POST | `/api/auth/register` | `{ name, email, password, role?, district? }` → `{ success, data: { token, user } }` |
+| POST | `/api/auth/login` | `{ email, password }` → `{ success, data: { token, user } }` |
 
-Roles: `Citizen` (default), `Volunteer`, `DMC Officer`, `District Officer`. Send the token as `Authorization: Bearer <token>`.
+Public registration creates `Citizen` accounts by default and may request `Volunteer`. `DMC Officer` and `District Officer` accounts must be provisioned by an authorized administrator. Emails are normalized to lowercase; duplicate addresses return HTTP 409. Send the returned token as `Authorization: Bearer <token>`.
 
 ### Endpoints (DMC Officer only)
 

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { DISTRICTS, RIVER_BASINS } = require("../utils/areas");
 
 const userRoles = ["Citizen", "Volunteer", "DMC Officer", "District Officer"];
 
@@ -30,6 +31,20 @@ const userSchema = new mongoose.Schema(
     district: {
       type: String,
       default: "",
+      enum: ["", ...DISTRICTS],
+    },
+    riverBasins: {
+      type: [{ type: String, enum: RIVER_BASINS }],
+      default: [],
+    },
+    phoneNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    pushTokens: {
+      type: [String],
+      default: [],
     },
   },
   { timestamps: true }
@@ -43,6 +58,9 @@ userSchema.pre("save", async function () {
 userSchema.methods.matchPassword = function (password) {
   return bcrypt.compare(password, this.password);
 };
+
+userSchema.index({ role: 1, district: 1 });
+userSchema.index({ role: 1, riverBasins: 1 });
 
 module.exports = mongoose.model("User", userSchema);
 module.exports.userRoles = userRoles;

@@ -62,6 +62,11 @@ const hazardReportSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    idempotencyKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     hazardType: {
       type: String,
       required: true,
@@ -110,7 +115,7 @@ const hazardReportSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Gives every new report a readable id like "HR-00125". The counter is
+// Gives every new report a readable id like "HR-20261008-000125". The counter is
 // incremented atomically, so two reports created at once never share an id.
 hazardReportSchema.pre("validate", async function () {
   if (this.reportId) return;
@@ -119,7 +124,13 @@ hazardReportSchema.pre("validate", async function () {
     { $inc: { seq: 1 } },
     { returnDocument: "after", upsert: true }
   );
-  this.reportId = `HR-${String(counter.seq).padStart(5, "0")}`;
+  const date = new Date();
+  const datePart = [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("");
+  this.reportId = `HR-${datePart}-${String(counter.seq).padStart(6, "0")}`;
 });
 
 module.exports = mongoose.model("HazardReport", hazardReportSchema);

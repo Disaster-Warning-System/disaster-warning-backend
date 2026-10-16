@@ -2,6 +2,7 @@ const {
   ShelterServiceError,
   listShelters,
   getShelter,
+  getShelterOccupancyHistory,
   createShelter,
   updateShelter,
   deleteShelter,
@@ -87,6 +88,15 @@ const getShelterById = async (req, res) => {
   }
 };
 
+const getShelterOccupancyHistoryById = async (req, res) => {
+  try {
+    const history = await getShelterOccupancyHistory(req.params.id);
+    return res.status(200).json({ success: true, data: history });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+
 const createShelterRecord = async (req, res) => {
   const errors = validateCreateShelter(req.body);
   if (errors.length)
@@ -139,6 +149,7 @@ const deleteShelterRecord = async (req, res) => {
 module.exports = {
   getShelters,
   getShelterById,
+  getShelterOccupancyHistoryById,
   createShelterRecord,
   updateShelterRecord,
   deleteShelterRecord,

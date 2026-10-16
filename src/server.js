@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 require("dotenv").config();
 const connectDB = require("./config/database");
 const hazardReportRoutes = require("./routes/hazardReportRoutes");
@@ -12,7 +13,13 @@ const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 const app = express();
 
-app.use(cors({ origin: ["http://localhost:5173", "http://localhost:3000"] }));
+const corsOrigins = (process.env.CORS_ORIGINS ||
+  "http://localhost:3000,http://localhost:5173,http://localhost:8081")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
 app.use("/api/alerts", require("./routes/alertRoutes"));
 app.use("/api/hazard-reports", hazardReportRoutes);
@@ -26,6 +33,14 @@ app.get("/", (req, res) => {
   res.json({ message: "Disaster Warning System API is running" });
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "disaster-warning-backend",
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  });
+});
+
 app.use(notFound);
 app.use(errorHandler);
 
@@ -33,6 +48,9 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is required to start the server");
+    }
     await connectDB();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

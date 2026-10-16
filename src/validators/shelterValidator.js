@@ -3,6 +3,8 @@ const statuses = new Set(["Open", "Closed"]);
 const isRecord = (value) =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const isWholeNumber = Number.isInteger;
+const isValidImageId = (value) =>
+  value === null || (typeof value === "string" && /^[a-f\d]{24}$/i.test(value));
 const isValidLocationPoint = (point) => {
   if (
     !isRecord(point) ||
@@ -69,6 +71,8 @@ const validateCreateShelter = (body) => {
     errors.push("Remarks must be text. Enter plain text or leave the field empty.");
   else if (typeof body.remarks === "string" && body.remarks.length > 500)
     errors.push("Remarks must be 500 characters or fewer. Shorten the note.");
+  if (body.imageId !== undefined && !isValidImageId(body.imageId))
+    errors.push("Shelter image reference is invalid. Upload a JPG, PNG, or WebP image again.");
   return errors;
 };
 
@@ -82,6 +86,7 @@ const validateUpdateShelter = (body) => {
     "occupancy",
     "operationalStatus",
     "remarks",
+    "imageId",
   ];
   const suppliedFields = Object.keys(body);
   if (suppliedFields.length === 0)
@@ -123,6 +128,8 @@ const validateUpdateShelter = (body) => {
     errors.push("Remarks must be text. Enter plain text or leave the field empty.");
   else if (typeof body.remarks === "string" && body.remarks.length > 500)
     errors.push("Remarks must be 500 characters or fewer. Shorten the note.");
+  if (body.imageId !== undefined && !isValidImageId(body.imageId))
+    errors.push("Shelter image reference is invalid. Upload a JPG, PNG, or WebP image again.");
   return errors;
 };
 
