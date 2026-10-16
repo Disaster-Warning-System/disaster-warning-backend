@@ -3,6 +3,8 @@ const User = require("../models/User");
 const { userRoles } = require("../models/User");
 const selfServiceRoles = ["Citizen", "Volunteer"];
 
+const publicRoles = ["Citizen", "Volunteer"];
+
 const createToken = (user) =>
   jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: "1d",

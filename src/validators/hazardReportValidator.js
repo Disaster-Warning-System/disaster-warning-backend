@@ -65,14 +65,6 @@ const validateHazardReport = (body) => {
     errors.push("photoFileId must be a valid file ID or null");
   }
 
-  if (
-    body.reportedBy !== undefined &&
-    body.reportedBy !== null &&
-    typeof body.reportedBy !== "string"
-  ) {
-    errors.push("reportedBy must be a string or null");
-  }
-
   return errors;
 };
 
