@@ -1,5 +1,6 @@
 const { SMSChannelAdapter } = require('../src/adapters/smsAdapter');
 const { PushChannelAdapter } = require('../src/adapters/pushAdapter');
+const { EmailChannelAdapter } = require('../src/adapters/emailAdapter');
 
 const smsEnv = { BREVO_API_KEY: 'test-brevo-key', BREVO_SMS_SENDER: 'DMSAlert' };
 
@@ -83,6 +84,64 @@ test('Text.lk reports missing API configuration instead of attempting delivery',
   } }).sendWarning({
     warningId: 'ALT-9', headline: 'Warning', instructions: 'Act', recipients: [],
   })).rejects.toMatchObject({ code: 'SMS_NOT_CONFIGURED' });
+  expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+test('Brevo email sends a separate warning email per registered recipient', async () => {
+  const fetchImpl = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 201,
+    json: async () => ({ messageId: '<email-123@brevo>' }),
+  });
+  const adapter = new EmailChannelAdapter({ fetchImpl, env: {
+    BREVO_API_KEY: 'test-brevo-key',
+    BREVO_EMAIL_SENDER: 'alerts@example.org',
+    BREVO_EMAIL_SENDER_NAME: 'DMC Alerts',
+  } });
+  const result = await adapter.sendWarning({
+    warningId: 'ALT-email-1',
+    headline: 'Flood warning',
+    instructions: 'Move to higher ground.',
+    severity: 'Warning',
+    targetAreas: ['Colombo'],
+    recipients: [{ citizenId: 'u1', name: 'Citizen One', email: 'one@example.lk' }],
+  });
+
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+  const [url, options] = fetchImpl.mock.calls[0];
+  expect(url).toBe('https://api.brevo.com/v3/smtp/email');
+  expect(options.headers['api-key']).toBe('test-brevo-key');
+  expect(JSON.parse(options.body)).toMatchObject({
+    sender: { email: 'alerts@example.org', name: 'DMC Alerts' },
+    to: [{ email: 'one@example.lk', name: 'Citizen One' }],
+    subject: '[Warning] Flood warning',
+    tags: ['ALT-email-1'],
+  });
+  expect(JSON.parse(options.body).textContent).toContain('Affected areas: Colombo');
+  expect(result).toMatchObject({ channel: 'Email', status: 'Accepted', acceptedCount: 1, attemptedCount: 1 });
+  expect(result.providerResults[0]).toMatchObject({ userId: 'u1', providerId: '<email-123@brevo>', status: 'Accepted' });
+});
+
+test('Brevo email logs missing recipient addresses without calling the provider', async () => {
+  const fetchImpl = jest.fn();
+  const result = await new EmailChannelAdapter({ fetchImpl, env: {
+    BREVO_API_KEY: 'test-brevo-key', BREVO_EMAIL_SENDER: 'alerts@example.org',
+  } }).sendWarning({
+    warningId: 'ALT-email-2', headline: 'Warning', instructions: 'Take action', severity: 'Watch',
+    recipients: [{ citizenId: 'u1', email: '' }],
+  });
+
+  expect(fetchImpl).not.toHaveBeenCalled();
+  expect(result).toMatchObject({ status: 'Failed', attemptedCount: 0, failedCount: 1 });
+  expect(result.providerResults[0]).toMatchObject({ code: 'EMAIL_ADDRESS_MISSING', status: 'Failed' });
+});
+
+test('Brevo email reports missing configuration without attempting delivery', async () => {
+  const fetchImpl = jest.fn();
+  await expect(new EmailChannelAdapter({ fetchImpl, env: {} }).sendWarning({
+    warningId: 'ALT-email-3', headline: 'Warning', instructions: 'Take action', severity: 'Watch',
+    recipients: [{ citizenId: 'u1', email: 'one@example.lk' }],
+  })).rejects.toMatchObject({ code: 'EMAIL_NOT_CONFIGURED' });
   expect(fetchImpl).not.toHaveBeenCalled();
 });
 

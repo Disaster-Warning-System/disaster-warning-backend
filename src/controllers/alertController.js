@@ -11,7 +11,7 @@ const resolveTargetRecipients = recipientResolver.resolveRegisteredRecipients ||
 const { RecipientResolutionError } = recipientResolver;
 const { dispatchAlertChannels } = dispatchModule;
 const allowedSeverities = ['Advisory', 'Watch', 'Warning', 'Evacuation Order'];
-const allowedChannels = ['SMS', 'Push'];
+const allowedChannels = ['SMS', 'Push', 'Email'];
 const allowedLanguages = ['Sinhala', 'Tamil', 'English'];
 const allowedTargetModes = ['District', 'River Basin'];
 const activeStatuses = ['Dispatching', 'Dispatched', 'Partially Dispatched'];
@@ -197,6 +197,7 @@ const createAlert = async (req, res) => {
       severity: payload.severity,
       headline: alert.headline,
       instructions: alert.instructions,
+      targetAreas: alert.targetAreas,
     });
     alert.status = dispatch.status;
     alert.deliveryLogs = dispatch.deliveryLogs;

@@ -1,5 +1,6 @@
 const { dispatchSMS } = require('../adapters/smsAdapter');
 const { dispatchPush } = require('../adapters/pushAdapter');
+const { dispatchEmail } = require('../adapters/emailAdapter');
 
 const DEFAULT_RETRY_POLICY = {
   maxRetries: 1,
@@ -48,6 +49,7 @@ const sendWithRetry = async ({
   headline,
   instructions,
   severity,
+  targetAreas,
   bypassSilent,
   retryPolicy,
 }) => {
@@ -58,7 +60,7 @@ const sendWithRetry = async ({
   while (attempts < maxAttempts) {
     attempts += 1;
     try {
-      const sendArguments = [warningId, recipients, headline, instructions, severity];
+      const sendArguments = [warningId, recipients, headline, instructions, severity, targetAreas];
       const result = await send(...sendArguments);
       const outcomeStatus = result.status || 'Success';
       return {
@@ -88,7 +90,8 @@ const dispatchAlertChannels = async ({
   severity,
   headline = 'Hazard warning',
   instructions = '',
-  adapters = { SMS: dispatchSMS, Push: dispatchPush },
+  targetAreas = [],
+  adapters = { SMS: dispatchSMS, Push: dispatchPush, Email: dispatchEmail },
   retryPolicy,
 }) => {
   const policy = normalizeRetryPolicy(retryPolicy);
@@ -114,6 +117,7 @@ const dispatchAlertChannels = async ({
       headline,
       instructions,
       severity,
+      targetAreas,
       bypassSilent: severity === 'Warning' || severity === 'Evacuation Order',
       retryPolicy: policy,
     }));

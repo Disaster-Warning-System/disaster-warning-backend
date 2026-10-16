@@ -4,8 +4,8 @@ const User = require('../src/models/User');
 const { RecipientResolutionError, resolveRecipients, resolveRegisteredRecipients } = require('../src/services/recipientResolver');
 
 const registeredUsers = [
-  { _id: 'user-1', name: 'One', district: 'Colombo', riverBasins: ['Kelani River Basin'], phoneNumber: '+94770000001', pushTokens: ['ExpoPushToken[one]'] },
-  { _id: 'user-2', name: 'Two', district: 'Gampaha', riverBasins: [], phoneNumber: '', pushTokens: [] },
+  { _id: 'user-1', name: 'One', email: 'one@example.lk', district: 'Colombo', riverBasins: ['Kelani River Basin'], phoneNumber: '+94770000001', pushTokens: ['ExpoPushToken[one]'] },
+  { _id: 'user-2', name: 'Two', email: 'two@example.lk', district: 'Gampaha', riverBasins: [], phoneNumber: '', pushTokens: [] },
 ];
 
 beforeEach(() => {
@@ -27,7 +27,7 @@ test('queries citizen and volunteer records, canonicalizes areas, and returns de
   });
   expect(result.targetAreas).toEqual(['Colombo', 'Kelani River Basin']);
   expect(result.recipientCount).toBe(2);
-  expect(result.recipients[0]).toMatchObject({ citizenId: 'user-1', phoneNumber: '+94770000001', pushTokens: ['ExpoPushToken[one]'] });
+  expect(result.recipients[0]).toMatchObject({ citizenId: 'user-1', email: 'one@example.lk', phoneNumber: '+94770000001', pushTokens: ['ExpoPushToken[one]'] });
 });
 
 test('blocks empty recipient sets for dispatch but supports empty previews', async () => {

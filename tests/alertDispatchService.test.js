@@ -8,19 +8,21 @@ test('dispatches selected channels independently and returns Dispatched', async 
   const adapters = {
     SMS: jest.fn().mockResolvedValue({ channel: 'SMS', status: 'Success' }),
     Push: jest.fn().mockResolvedValue({ channel: 'Push', status: 'Success' }),
+    Email: jest.fn().mockResolvedValue({ channel: 'Email', status: 'Accepted' }),
   };
 
   const result = await dispatchAlertChannels({
     warningId: 'ALT-1',
     recipients,
-    channels: ['SMS', 'Push'],
+    channels: ['SMS', 'Push', 'Email'],
     severity: 'Warning',
     adapters,
   });
 
   expect(result.status).toBe('Dispatched');
-  expect(result.deliveryLogs).toHaveLength(2);
+  expect(result.deliveryLogs).toHaveLength(3);
   expect(adapters.Push).toHaveBeenCalled();
+  expect(adapters.Email).toHaveBeenCalled();
 });
 
 test('retries a retryable SMS timeout and succeeds', async () => {

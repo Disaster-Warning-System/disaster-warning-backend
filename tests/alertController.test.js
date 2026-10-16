@@ -128,7 +128,6 @@ test.each([
   [{ ...payload, targetAreas: undefined }],
   [{ ...payload, targetAreas: [] }],
   [{ ...payload, channels: [] }],
-  [{ ...payload, channels: ['Email'] }],
   [{ ...payload, languages: ['French'] }],
 ])('rejects invalid alert input: %j', async (invalidPayload) => {
   const response = await request(app)
@@ -360,7 +359,6 @@ test('returns 404 when delivery details do not exist', async () => {
 
 test.each([
   [{ ...payload, targetMode: 'Province' }],
-  [{ ...payload, channels: ['Email'] }],
   [{ ...payload, channels: undefined }],
   [{ ...payload, targetAreas: ['   '] }],
 ])('rejects invalid target or channel values: %j', async (invalidPayload) => {
@@ -397,6 +395,18 @@ test('accepts the new field names and normalizes duplicate areas and channels', 
     instructions: 'Move to higher ground.',
   }));
   expect(dispatchAlertChannels).toHaveBeenCalledTimes(1);
+});
+
+test('accepts Email as a delivery channel and dispatches it through the channel service', async () => {
+  const response = await request(app).post('/api/alerts')
+    .set('Authorization', `Bearer ${officerToken}`)
+    .send({ ...payload, channels: ['Email'] });
+
+  expect(response.status).toBe(201);
+  expect(Alert.create).toHaveBeenCalledWith(expect.objectContaining({
+    channels: ['Email'], selectedDeliveryChannels: ['Email'],
+  }));
+  expect(dispatchAlertChannels).toHaveBeenCalledWith(expect.objectContaining({ channels: ['Email'] }));
 });
 
 test('retries an SMS timeout and dispatches successfully with Push', async () => {

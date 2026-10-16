@@ -76,11 +76,12 @@ const resolveRegisteredRecipients = async (targetAreas, { allowEmpty = false } =
   if (riverBasins.length) matches.push({ riverBasins: { $in: riverBasins } });
 
   const users = await User.find({ ...userQuery, $or: matches })
-    .select('_id name district riverBasins phoneNumber pushTokens')
+    .select('_id name email district riverBasins phoneNumber pushTokens')
     .lean();
   const recipients = [...new Map(users.map((user) => [String(user._id), {
     citizenId: String(user._id),
     name: user.name,
+    email: user.email || '',
     district: user.district || '',
     riverBasins: user.riverBasins || [],
     phoneNumber: user.phoneNumber || '',
