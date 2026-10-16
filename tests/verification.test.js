@@ -29,18 +29,17 @@ const createReport = (overrides = {}) =>
     ...overrides,
   });
 
-// Mongoose always refreshes updatedAt, so move it back with a raw update
+
 const ageReport = (report, minutes) =>
   HazardReport.collection.updateOne(
     { _id: report._id },
     { $set: { updatedAt: new Date(Date.now() - minutes * 60 * 1000) } }
   );
 
-// The first run downloads a MongoDB binary, which can take a while
+
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
-  // The driver loads "os" with a dynamic import, which Jest's CommonJS sandbox can't run.
-  // Without it the handshake has no client metadata and the server refuses the connection.
+  
   await mongoose.connect(mongoServer.getUri(), { runtimeAdapters: { os: require("os") } });
 }, 300000);
 
