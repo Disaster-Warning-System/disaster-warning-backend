@@ -57,8 +57,10 @@ const createHazardReport = async (req, res) => {
       evidence: Array.isArray(evidence)
         ? evidence.map((item) => ({ url: item.url.trim(), type: item.type || "image" }))
         : [],
+
       // Taken from the token, never the body, so a report can't be attributed to someone else
       reportedBy: req.user?.id ?? null,
+
       idempotencyKey: idempotencyKey || undefined,
       status: "Pending Verification",
     });
@@ -122,12 +124,14 @@ const getHazardReportById = async (req, res) => {
   }
 
   try {
+
     const report = await HazardReport.findById(req.params.id);
     // Only officers and the reporter may see a report; others get 404 so they can't tell it exists
     const canView =
       report &&
       (req.user.role === "DMC Officer" || report.reportedBy === req.user.id);
     if (!canView) {
+
       return res.status(404).json({
         success: false,
         message: "Hazard report not found",

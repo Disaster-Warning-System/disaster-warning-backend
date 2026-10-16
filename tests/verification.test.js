@@ -100,12 +100,11 @@ describe("security", () => {
     expect(response.body.data.reportedBy).toBe(citizen._id.toString());
   });
 
-  test("anonymous reports are still accepted without a reporter", async () => {
+  test("a report cannot be submitted without logging in", async () => {
     const response = await request(app)
       .post("/api/hazard-reports")
       .send({ hazardType: "Fire", description: "Smoke", location: { address: "Galle" } });
-    expect(response.status).toBe(201);
-    expect(response.body.data.reportedBy).toBeNull();
+    expect(response.status).toBe(401);
   });
 });
 
