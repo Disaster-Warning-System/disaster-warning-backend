@@ -24,46 +24,53 @@ const deliveryLogSchema = new mongoose.Schema(
     errorDetails: { type: mongoose.Schema.Types.Mixed, default: '' },
     reason: { type: String, default: '' },
     attempts: { type: Number, min: 0, default: 1 },
+    acceptedCount: { type: Number, min: 0, default: 0 },
+    failedCount: { type: Number, min: 0, default: 0 },
+    eligibleCount: { type: Number, min: 0, default: 0 },
+    attemptedCount: { type: Number, min: 0, default: 0 },
+    providerResults: { type: [mongoose.Schema.Types.Mixed], default: [] },
     timestamp: { type: Date, default: Date.now },
   },
   { _id: false }
 );
 
-deliveryLogSchema.pre('validate', function setDeliveryOutcome(next) {
+deliveryLogSchema.pre('validate', function setDeliveryOutcome() {
   this.outcome = this.outcome || this.status;
   this.status = this.status || this.outcome;
   this.errorDetails = this.errorDetails || this.reason || '';
-  next();
 });
 
 const alertSchema = new mongoose.Schema(
   {
     alertId: { type: String, required: true, unique: true, index: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     sourceReportId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'HazardReport',
       default: null,
       index: true,
     },
+    supersedesAlertId: { type: String, default: "", index: true },
     hazardType: { type: String, trim: true, default: 'General' },
-    headline: { type: String, required: true, trim: true },
+    headline: { type: String, required: function requiredHeadline() { return this.status !== 'Draft'; }, trim: true, default: '' },
     instructions: { type: String, trim: true, default: '' },
     // Retained for compatibility with the existing alert API.
-    instruction: { type: String, required: true, trim: true },
+    instruction: { type: String, required: function requiredInstruction() { return this.status !== 'Draft'; }, trim: true, default: '' },
     severity: {
       type: String,
       enum: severityValues,
-      required: true,
+      required: function requiredSeverity() { return this.status !== 'Draft'; },
+      default: 'Advisory',
     },
     targetMode: {
       type: String,
       enum: targetModeValues,
       default: 'District',
     },
-    targetAreas: { type: [{ type: String, trim: true }], required: true },
+    targetAreas: { type: [{ type: String, trim: true }], default: [] },
     selectedDeliveryChannels: { type: [String], default: [] },
     // Retained for compatibility with existing clients.
-    channels: { type: [String], required: true },
+    channels: { type: [String], default: [] },
     languages: {
       type: [{ type: String, enum: ['Sinhala', 'Tamil', 'English'] }],
       default: ['English'],

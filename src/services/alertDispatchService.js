@@ -17,18 +17,37 @@ const normalizeRetryPolicy = (retryPolicy = {}) => ({
   retryDelayMs: Math.max(0, Number.parseInt(retryPolicy.retryDelayMs ?? DEFAULT_RETRY_POLICY.retryDelayMs, 10) || 0),
 });
 
-const createFailureLog = (channel, error, attempts) => ({
-  channel,
-  status: 'Failed',
-  reason: error.message || `${channel} delivery failed.`,
-  ...(attempts > 1 ? { attempts } : {}),
-});
+const createFailureLog = (channel, error, attempts, recipients = []) => {
+  const reason = error.message || `${channel} delivery failed.`;
+  const code = error.code || 'CHANNEL_DISPATCH_FAILED';
+  const recipientList = [...recipients];
+  return {
+    channel,
+    status: 'Failed',
+    reason,
+    errorDetails: { code, message: reason },
+    acceptedCount: 0,
+    failedCount: recipientList.length,
+    eligibleCount: recipientList.length,
+    attemptedCount: 0,
+    providerResults: recipientList.map((recipient) => ({
+      userId: typeof recipient === 'string' ? recipient : recipient?.citizenId,
+      status: 'Failed',
+      error: reason,
+      code,
+    })),
+    attempts,
+  };
+};
 
 const sendWithRetry = async ({
   channel,
   send,
   warningId,
   recipients,
+  headline,
+  instructions,
+  severity,
   bypassSilent,
   retryPolicy,
 }) => {
@@ -39,21 +58,20 @@ const sendWithRetry = async ({
   while (attempts < maxAttempts) {
     attempts += 1;
     try {
-      const sendArguments = channel === 'Push'
-        ? [warningId, recipients.size, bypassSilent]
-        : [warningId, recipients.size];
+      const sendArguments = [warningId, recipients, headline, instructions, severity];
       const result = await send(...sendArguments);
+      const outcomeStatus = result.status || 'Success';
       return {
         ...result,
         channel,
-        status: 'Success',
+        status: outcomeStatus,
         ...(attempts > 1 ? { attempts } : {}),
       };
     } catch (error) {
       lastError = error;
       const retryable = retryPolicy.retryableCodes.includes(error.code);
       if (!retryable || attempts >= maxAttempts) {
-        const failure = createFailureLog(channel, error, attempts);
+        const failure = createFailureLog(channel, error, attempts, recipients);
         return failure;
       }
       await wait(retryPolicy.retryDelayMs);
@@ -68,6 +86,8 @@ const dispatchAlertChannels = async ({
   recipients,
   channels,
   severity,
+  headline = 'Hazard warning',
+  instructions = '',
   adapters = { SMS: dispatchSMS, Push: dispatchPush },
   retryPolicy,
 }) => {
@@ -81,6 +101,7 @@ const dispatchAlertChannels = async ({
         channel,
         new Error(`Unsupported delivery channel: ${channel}`),
         0,
+        recipients,
       ));
       continue;
     }
@@ -90,16 +111,20 @@ const dispatchAlertChannels = async ({
       send,
       warningId,
       recipients,
+      headline,
+      instructions,
+      severity,
       bypassSilent: severity === 'Warning' || severity === 'Evacuation Order',
       retryPolicy: policy,
     }));
   }
 
-  const successful = deliveryLogs.filter((log) => log.status === 'Success').length;
-  const failed = deliveryLogs.length - successful;
-  const status = failed === 0
+  const successful = deliveryLogs.filter((log) => ['Success', 'Accepted'].includes(log.status)).length;
+  const partial = deliveryLogs.some((log) => log.status === 'Partially Accepted');
+  const failed = deliveryLogs.length - successful - (partial ? 1 : 0);
+  const status = failed === 0 && !partial
     ? 'Dispatched'
-    : successful === 0
+    : successful === 0 && !partial
       ? 'Failed'
       : 'Partially Dispatched';
 

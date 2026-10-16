@@ -1,43 +1,49 @@
-const {
-  RecipientResolutionError,
-  resolveRecipients,
-} = require('../src/services/recipientResolver');
+jest.mock('../src/models/User', () => ({ find: jest.fn() }));
 
-const recipientIds = (result) => result.recipients.map((recipient) => recipient.citizenId);
+const User = require('../src/models/User');
+const { RecipientResolutionError, resolveRecipients, resolveRegisteredRecipients } = require('../src/services/recipientResolver');
 
-test('resolves recipients for a single target area', () => {
-  const result = resolveRecipients(['Colombo']);
+const registeredUsers = [
+  { _id: 'user-1', name: 'One', district: 'Colombo', riverBasins: ['Kelani River Basin'], phoneNumber: '+94770000001', pushTokens: ['ExpoPushToken[one]'] },
+  { _id: 'user-2', name: 'Two', district: 'Gampaha', riverBasins: [], phoneNumber: '', pushTokens: [] },
+];
 
-  expect(recipientIds(result)).toEqual(['C001', 'C002', 'C003']);
-  expect(result.recipientCount).toBe(3);
-  expect(result.targetAreas).toEqual(['Colombo']);
+beforeEach(() => {
+  jest.clearAllMocks();
+  User.find.mockReturnValue({
+    select: jest.fn().mockReturnThis(),
+    lean: jest.fn().mockResolvedValue(registeredUsers),
+  });
 });
 
-test('resolves recipients across multiple target areas', () => {
-  const result = resolveRecipients(['Colombo', 'Gampaha']);
-
-  expect(recipientIds(result)).toEqual(['C001', 'C002', 'C003', 'C004']);
-  expect(result.recipientCount).toBe(4);
-  expect(result.targetAreas).toEqual(['Colombo', 'Gampaha']);
+test('queries citizen and volunteer records, canonicalizes areas, and returns delivery details', async () => {
+  const result = await resolveRegisteredRecipients([' colombo ', 'Kelani River Basin', 'Colombo']);
+  expect(User.find).toHaveBeenCalledWith({
+    role: { $in: ['Citizen', 'Volunteer'] },
+    $or: [
+      { district: { $in: ['Colombo'] } },
+      { riverBasins: { $in: ['Kelani River Basin'] } },
+    ],
+  });
+  expect(result.targetAreas).toEqual(['Colombo', 'Kelani River Basin']);
+  expect(result.recipientCount).toBe(2);
+  expect(result.recipients[0]).toMatchObject({ citizenId: 'user-1', phoneNumber: '+94770000001', pushTokens: ['ExpoPushToken[one]'] });
 });
 
-test('deduplicates citizens shared by overlapping districts and river basins', () => {
-  const result = resolveRecipients(['Colombo', 'Kelani River Basin']);
-
-  expect(recipientIds(result)).toEqual(['C001', 'C002', 'C003', 'C005']);
-  expect(result.recipientCount).toBe(4);
+test('blocks empty recipient sets for dispatch but supports empty previews', async () => {
+  User.find.mockReturnValue({ select: jest.fn().mockReturnThis(), lean: jest.fn().mockResolvedValue([]) });
+  await expect(resolveRegisteredRecipients(['Colombo'])).rejects.toBeInstanceOf(RecipientResolutionError);
+  await expect(resolveRegisteredRecipients(['Colombo'], { allowEmpty: true })).resolves.toMatchObject({ recipientCount: 0, recipients: [] });
 });
 
-test('deduplicates duplicate target area selections', () => {
-  const result = resolveRecipients(['Colombo', 'Colombo']);
-
-  expect(recipientIds(result)).toEqual(['C001', 'C002', 'C003']);
-  expect(result.targetAreas).toEqual(['Colombo']);
+test('rejects unknown or empty areas before querying users', async () => {
+  await expect(resolveRegisteredRecipients(['Atlantis'])).rejects.toThrow(/supported districts or river basins/i);
+  await expect(resolveRegisteredRecipients([])).rejects.toThrow(/target areas must be an array/i);
+  expect(User.find).not.toHaveBeenCalled();
 });
 
-test('throws a domain validation error when no citizens match', () => {
-  expect(() => resolveRecipients(['Unknown Area'])).toThrow(RecipientResolutionError);
-  expect(() => resolveRecipients(['Unknown Area'])).toThrow(
-    'No citizens registered in selected target areas',
-  );
+test('retains the legacy mock repository helper for existing adapter-focused callers', () => {
+  const repository = { findByTargetArea: (area) => area === 'Colombo' ? [{ citizenId: 'C1' }] : [{ citizenId: 'C1' }, { citizenId: 'C2' }] };
+  const result = resolveRecipients(['Colombo', 'Kelani River Basin'], repository);
+  expect(result.recipients.map((recipient) => recipient.citizenId)).toEqual(['C1', 'C2']);
 });

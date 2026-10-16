@@ -19,14 +19,19 @@ The warning workflow is available to a DMC Officer through the protected `/api/a
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/alerts` | Resolve recipients, persist a `Dispatching` alert, process SMS and Push independently, and persist the final status |
-| `GET` | `/api/alerts/feed` | Return `Dispatched` and `Partially Dispatched` alerts for the citizen feed |
-| `GET` | `/api/alerts/:alertId/delivery-details` | Return per-channel delivery logs for the officer dashboard |
+| `POST` | `/api/alerts/preview` | Resolve registered recipients and check configured minimums and overlapping active warnings |
+| `POST/GET` | `/api/alerts/drafts` | Persist and list the signed-in officer's drafts |
+| `GET/PUT/DELETE` | `/api/alerts/drafts/:alertId` | Read, update, or delete that officer's draft |
+| `GET` | `/api/alerts/feed` | Authenticated Citizen/Volunteer feed filtered by the account's district and subscribed river basins |
+| `GET` | `/api/alerts/:alertId/delivery-details` | Return per-channel provider outcomes for the officer dashboard |
 
 The create payload uses `hazardType`, `headline`, `instructions`, `severity`, `targetMode`, `targetAreas`, `languages`, and `channels`. Supported severities are `Advisory`, `Watch`, `Warning`, and `Evacuation Order`; supported target modes are `District` and `River Basin`; supported languages are `Sinhala`, `Tamil`, and `English`; supported channels are `SMS` and `Push`.
 
-Recipient resolution uses an explicitly simulated repository for development and tests. It is not a registry of real Sri Lankan citizens. Citizens are deduplicated by `citizenId` across overlapping target areas. An empty result returns HTTP 400 before an alert is created or an adapter is called.
+Recipient resolution queries registered Citizen and Volunteer accounts in MongoDB and deduplicates by account ID across all selected target areas. District targeting supports all 25 districts. River-basin targeting supports the 103 basin labels in the Irrigation Department's Hydrological Annual 2021/22; users select their basin subscriptions during registration or later in Profile. The boundary GIS layer is not included, so targeting and registration match selected official basin labels rather than deriving basin membership from a citizen's coordinates. Empty recipient sets block dispatch. Minimum counts and the conflict time window are configurable through the `ALERT_MIN_RECIPIENTS_*` and `ALERT_CONFLICT_WINDOW_MINUTES` environment variables; the defaults are policy placeholders and should be set to the DMC's approved values.
 
-SMS and Push are independent simulated adapters. They use short configurable delays and deterministic `success`, `timeout`, and `failure` modes in unit tests; no real messages are sent. Retry behavior is bounded and retryable failures cannot leave an alert in `Dispatching`.
+SMS and Push are independent adapters. SMS defaults to Brevo: set `SMS_PROVIDER=brevo`, `BREVO_API_KEY`, and `BREVO_SMS_SENDER`. Brevo sender IDs and account access must be enabled for the destination country; SMS credits are purchased through Brevo. To use Text.lk instead, set `SMS_PROVIDER=textlk`, `TEXTLK_API_KEY`, and `TEXTLK_SENDER_ID`. Text.lk advertises a demo sender and 10 free test SMS, but says some demo sends may be simulated; verify receipt before relying on it for a presentation. Its demo is not production delivery. The backend records provider acceptance/response, not guaranteed handset receipt. Push uses Expo Push Service and registered device tokens; `EXPO_ACCESS_TOKEN` is optional. Without provider configuration, that channel is recorded as failed, and other selected channels continue. Provider secrets belong only in the backend `.env` and must never be placed in either frontend.
+
+Mobile accounts need a verified district and Expo push token to receive matching push warnings. Existing accounts can update district, basin subscriptions, and phone through the mobile Profile screen. SMS is sent only to accounts with a phone number in international E.164 format. Expo remote push requires an EAS project ID in `EXPO_PUBLIC_EAS_PROJECT_ID` (or Expo config) and a development/production build; Expo Go does not provide remote push testing on Android for the current SDK. The citizen feed remains available through authenticated polling at `GET /api/alerts/feed`.
 
 Run the focused Issue Hazard Warning suite and coverage report with:
 
@@ -34,7 +39,7 @@ Run the focused Issue Hazard Warning suite and coverage report with:
 npm run test:warning
 ```
 
-The command covers the warning controller, routes, recipient resolver, and dispatch service. The general `npm test` command also runs the complete backend test suite, including unrelated existing features.
+The focused command covers warning validation/dispatch, recipient lookup and deduplication, Brevo/Text.lk and Expo adapter outcomes, area profile updates, push-token registration, and role-protected API routes. It reports focused feature coverage. The general `npm test` command also runs the complete backend test suite, including unrelated existing features.
 
 If the Node.js runtime cannot resolve an Atlas `mongodb+srv` URI through the system DNS resolver, set `MONGO_DNS_SERVERS=1.1.1.1,1.0.0.1` in the local `.env` file. This optional setting changes DNS resolvers process-wide for this backend process; omit it when the default resolver works.
 
@@ -71,10 +76,10 @@ Seed logins (password `password123`): `officer@dmc.lk`, `officer2@dmc.lk`, `citi
 
 | Method | Endpoint | Body |
 | --- | --- | --- |
-| POST | `/api/auth/register` | `{ name, email, password, role?, district? }` |
-| POST | `/api/auth/login` | `{ email, password }` → `{ token, user }` |
+| POST | `/api/auth/register` | `{ name, email, password, role?, district? }` → `{ success, data: { token, user } }` |
+| POST | `/api/auth/login` | `{ email, password }` → `{ success, data: { token, user } }` |
 
-Roles: `Citizen` (default), `Volunteer`, `DMC Officer`, `District Officer`. Send the token as `Authorization: Bearer <token>`.
+Public registration creates `Citizen` accounts by default and may request `Volunteer`. `DMC Officer` and `District Officer` accounts must be provisioned by an authorized administrator. Emails are normalized to lowercase; duplicate addresses return HTTP 409. Send the returned token as `Authorization: Bearer <token>`.
 
 ### Endpoints (DMC Officer only)
 

@@ -57,6 +57,16 @@ test('returns Partially Dispatched when one channel fails', async () => {
 
   expect(result.status).toBe('Partially Dispatched');
   expect(result.deliveryLogs.map((log) => log.status)).toEqual(['Failed', 'Success']);
+  expect(result.deliveryLogs[0]).toMatchObject({
+    acceptedCount: 0,
+    failedCount: 2,
+    eligibleCount: 2,
+    attemptedCount: 0,
+    providerResults: [
+      { userId: 'C001', status: 'Failed', error: 'SMS gateway failure' },
+      { userId: 'C002', status: 'Failed', error: 'SMS gateway failure' },
+    ],
+  });
 });
 
 test('returns Failed when all selected channels fail', async () => {

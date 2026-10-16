@@ -33,7 +33,7 @@ test.each(["DMC Officer", "District Officer"])(
     const res = responseRecorder();
 
     await register({
-      body: { name: "Test User", email: "user@example.lk", password: "password123", role },
+      body: { name: "Test User", email: "user@example.lk", password: "password123", district: "Colombo", role },
     }, res);
 
     expect(res.statusCode).toBe(403);
